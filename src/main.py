@@ -17,7 +17,7 @@ from logger_config import setup_logging, get_logger
 logger = get_logger(__name__)
 
 # Toggle this to True to only process readings (skip Steps 0, 2, and 3)
-READING_ONLY_MODE = True
+READING_ONLY_MODE = False
 
 
 def main():

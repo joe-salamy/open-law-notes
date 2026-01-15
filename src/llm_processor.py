@@ -407,12 +407,15 @@ def execute_parallel_pdf_processing(
                     logger.info(
                         f"✗ [{successful + failed}/{total_files}] {original_file.name}: {message}"
                     )
-                    logger.error(f"Failed to process PDF {original_file.name}: {message}")
+                    logger.error(
+                        f"Failed to process PDF {original_file.name}: {message}"
+                    )
 
             except Exception as e:
                 failed += 1
                 logger.error(
-                    f"Unexpected error processing PDF {input_file.name}: {e}", exc_info=True
+                    f"Unexpected error processing PDF {input_file.name}: {e}",
+                    exc_info=True,
                 )
                 logger.info(
                     f"✗ [{successful + failed}/{total_files}] {input_file.name}: Unexpected error: {e}"
@@ -466,7 +469,9 @@ def process_class_files(
         logger.info(f"No {file_type} files found")
         return 0, 0
 
-    logger.info(f"Found {total_files} {file_type} file(s) ({len(text_files)} text, {len(pdf_files)} PDF)")
+    logger.info(
+        f"Found {total_files} {file_type} file(s) ({len(text_files)} text, {len(pdf_files)} PDF)"
+    )
     logger.debug(f"{file_type} text files: {[f.name for f in text_files]}")
     logger.debug(f"{file_type} PDF files: {[f.name for f in pdf_files]}")
 
@@ -491,7 +496,12 @@ def process_class_files(
     try:
         logger.debug(f"Creating GenerativeModel: {config.GEMINI_MODEL}")
         model = genai.GenerativeModel(
-            model_name=config.GEMINI_MODEL, system_instruction=system_prompt
+            model_name=config.GEMINI_MODEL,
+            system_instruction=system_prompt,
+            generation_config=genai.GenerationConfig(
+                max_output_tokens=config.GEMINI_MAX_OUTPUT_TOKENS,
+                temperature=config.GEMINI_TEMPERATURE,
+            ),
         )
         logger.debug(f"GenerativeModel created successfully")
     except Exception as e:
@@ -518,7 +528,9 @@ def process_class_files(
             )
             for text_file in text_files
         ]
-        successful, failed = execute_parallel_processing(text_task_args, len(text_files))
+        successful, failed = execute_parallel_processing(
+            text_task_args, len(text_files)
+        )
         total_successful += successful
         total_failed += failed
 
@@ -535,16 +547,23 @@ def process_class_files(
             )
             for pdf_file in pdf_files
         ]
-        successful, failed = execute_parallel_pdf_processing(pdf_task_args, len(pdf_files))
+        successful, failed = execute_parallel_pdf_processing(
+            pdf_task_args, len(pdf_files)
+        )
         total_successful += successful
         total_failed += failed
 
-    logger.debug(f"Completed processing for {class_name}: {total_successful} successful, {total_failed} failed")
+    logger.debug(
+        f"Completed processing for {class_name}: {total_successful} successful, {total_failed} failed"
+    )
     return total_successful, total_failed
 
 
 def process_all_lectures(classes: List[Path], new_outputs_dir: Path) -> None:
-    """Process lecture transcripts for all classes."""
+    """
+    Process lecture transcripts for all classes.
+    Parallelizes across ALL classes, not just within each class.
+    """
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         logger.error("GEMINI_API_KEY not found in .env file")
@@ -554,38 +573,141 @@ def process_all_lectures(classes: List[Path], new_outputs_dir: Path) -> None:
     logger.info(f"Parallel workers: {config.MAX_LLM_WORKERS}")
     logger.debug(f"Processing lecture transcripts for {len(classes)} classes")
 
-    total_successful = 0
-    total_failed = 0
+    # Configure API once
+    genai.configure(api_key=api_key)
+
+    # Collect all files and create models for each class
+    all_text_task_args = []
+    all_pdf_task_args = []
+    class_file_counts = {}
 
     for class_folder in classes:
         paths = get_class_paths(class_folder)
         class_name = paths["class_name"]
-        logger.info("─" * 70)
-        logger.info(f"{class_name}:")
-        logger.debug(f"Processing class folder: {class_folder}")
 
+        text_files = get_text_files(class_folder, reading=False)
+        pdf_files = get_pdf_files(class_folder, reading=False)
+        class_file_counts[class_name] = len(text_files) + len(pdf_files)
+
+        if not text_files and not pdf_files:
+            logger.info(f"{class_name}: No lecture transcript files found")
+            continue
+
+        logger.info(
+            f"{class_name}: {len(text_files)} text, {len(pdf_files)} PDF file(s)"
+        )
+
+        # Create model for this class
         try:
-            successful, failed = process_class_files(
-                class_folder,
-                is_reading=False,
-                new_outputs_dir=new_outputs_dir,
-                api_key=api_key,
+            system_prompt = load_system_prompt(config.LECTURE_PROMPT_FILE, class_name)
+            if system_prompt is None:
+                logger.error(f"Error loading prompt for {class_name}")
+                continue
+            model = genai.GenerativeModel(
+                model_name=config.GEMINI_MODEL,
+                system_instruction=system_prompt,
+                generation_config=genai.GenerationConfig(
+                    max_output_tokens=config.GEMINI_MAX_OUTPUT_TOKENS,
+                    temperature=config.GEMINI_TEMPERATURE,
+                ),
             )
-            total_successful += successful
-            total_failed += failed
-
-            if successful > 0:
-                logger.info(f"✓ Processed {successful} file(s)")
-                logger.debug(
-                    f"{class_name}: {successful} lecture files processed successfully"
-                )
-            if failed > 0:
-                logger.info(f"✗ Failed {failed} file(s)")
-                logger.warning(f"{class_name}: {failed} lecture files failed")
-
         except Exception as e:
-            logger.error(f"Error processing class {class_name}: {e}", exc_info=True)
-            logger.info(f"✗ Error processing class: {e}")
+            logger.error(f"Error creating model for {class_name}: {e}", exc_info=True)
+            continue
+
+        # Add text file tasks
+        for text_file in text_files:
+            all_text_task_args.append(
+                (
+                    text_file,
+                    model,
+                    paths["lecture_output"],
+                    paths["lecture_processed_txt"],
+                    new_outputs_dir,
+                    False,  # is_reading
+                    class_name,  # for tracking
+                )
+            )
+
+        # Add PDF file tasks
+        for pdf_file in pdf_files:
+            all_pdf_task_args.append(
+                (
+                    pdf_file,
+                    model,
+                    paths["lecture_output"],
+                    paths["lecture_processed_txt"],
+                    new_outputs_dir,
+                    class_name,  # for tracking
+                )
+            )
+
+    total_files = len(all_text_task_args) + len(all_pdf_task_args)
+    if total_files == 0:
+        logger.info("No lecture transcript files found in any class")
+        return
+
+    logger.info(f"Total lecture files to process: {total_files}")
+
+    # Track results by class
+    class_results = {name: {"successful": 0, "failed": 0} for name in class_file_counts}
+    total_successful = 0
+    total_failed = 0
+
+    # Process ALL files from ALL classes in a single thread pool
+    with ThreadPoolExecutor(max_workers=config.MAX_LLM_WORKERS) as executor:
+        # Submit text file tasks
+        text_futures = {
+            executor.submit(process_single_file, args[:6]): args
+            for args in all_text_task_args
+        }
+        # Submit PDF file tasks
+        pdf_futures = {
+            executor.submit(process_single_pdf, args[:5]): args
+            for args in all_pdf_task_args
+        }
+
+        all_futures = {**text_futures, **pdf_futures}
+
+        for future in as_completed(all_futures):
+            args = all_futures[future]
+            input_file = args[0]
+            class_name = args[-1]  # Last element is class_name
+
+            try:
+                success, message, original_file = future.result()
+
+                if success:
+                    total_successful += 1
+                    class_results[class_name]["successful"] += 1
+                    logger.info(
+                        f"✓ [{class_name}] [{total_successful + total_failed}/{total_files}] {original_file.name}"
+                    )
+                else:
+                    total_failed += 1
+                    class_results[class_name]["failed"] += 1
+                    logger.info(
+                        f"✗ [{class_name}] [{total_successful + total_failed}/{total_files}] {original_file.name}: {message}"
+                    )
+
+            except Exception as e:
+                total_failed += 1
+                class_results[class_name]["failed"] += 1
+                logger.error(
+                    f"Unexpected error processing {input_file.name}: {e}", exc_info=True
+                )
+                logger.info(
+                    f"✗ [{class_name}] [{total_successful + total_failed}/{total_files}] {input_file.name}: Unexpected error: {e}"
+                )
+
+    # Print per-class summary
+    logger.info("─" * 70)
+    logger.info("Per-class summary:")
+    for class_name, results in class_results.items():
+        if results["successful"] > 0 or results["failed"] > 0:
+            logger.info(
+                f"  {class_name}: {results['successful']} successful, {results['failed']} failed"
+            )
 
     logger.info("─" * 70)
     logger.info(
@@ -598,7 +720,10 @@ def process_all_lectures(classes: List[Path], new_outputs_dir: Path) -> None:
 
 
 def process_all_readings(classes: List[Path], new_outputs_dir: Path) -> None:
-    """Process reading files for all classes."""
+    """
+    Process reading files for all classes.
+    Parallelizes across ALL classes, not just within each class.
+    """
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         logger.error("GEMINI_API_KEY not found in .env file")
@@ -608,38 +733,141 @@ def process_all_readings(classes: List[Path], new_outputs_dir: Path) -> None:
     logger.info(f"Parallel workers: {config.MAX_LLM_WORKERS}")
     logger.debug(f"Processing reading files for {len(classes)} classes")
 
-    total_successful = 0
-    total_failed = 0
+    # Configure API once
+    genai.configure(api_key=api_key)
+
+    # Collect all files and create models for each class
+    all_text_task_args = []
+    all_pdf_task_args = []
+    class_file_counts = {}
 
     for class_folder in classes:
         paths = get_class_paths(class_folder)
         class_name = paths["class_name"]
-        logger.info("─" * 70)
-        logger.info(f"{class_name}:")
-        logger.debug(f"Processing class folder: {class_folder}")
 
+        text_files = get_text_files(class_folder, reading=True)
+        pdf_files = get_pdf_files(class_folder, reading=True)
+        class_file_counts[class_name] = len(text_files) + len(pdf_files)
+
+        if not text_files and not pdf_files:
+            logger.info(f"{class_name}: No reading files found")
+            continue
+
+        logger.info(
+            f"{class_name}: {len(text_files)} text, {len(pdf_files)} PDF file(s)"
+        )
+
+        # Create model for this class
         try:
-            successful, failed = process_class_files(
-                class_folder,
-                is_reading=True,
-                new_outputs_dir=new_outputs_dir,
-                api_key=api_key,
+            system_prompt = load_system_prompt(config.READING_PROMPT_FILE, class_name)
+            if system_prompt is None:
+                logger.error(f"Error loading prompt for {class_name}")
+                continue
+            model = genai.GenerativeModel(
+                model_name=config.GEMINI_MODEL,
+                system_instruction=system_prompt,
+                generation_config=genai.GenerationConfig(
+                    max_output_tokens=config.GEMINI_MAX_OUTPUT_TOKENS,
+                    temperature=config.GEMINI_TEMPERATURE,
+                ),
             )
-            total_successful += successful
-            total_failed += failed
-
-            if successful > 0:
-                logger.info(f"✓ Processed {successful} file(s)")
-                logger.debug(
-                    f"{class_name}: {successful} reading files processed successfully"
-                )
-            if failed > 0:
-                logger.info(f"✗ Failed {failed} file(s)")
-                logger.warning(f"{class_name}: {failed} reading files failed")
-
         except Exception as e:
-            logger.error(f"Error processing class {class_name}: {e}", exc_info=True)
-            logger.info(f"✗ Error processing class: {e}")
+            logger.error(f"Error creating model for {class_name}: {e}", exc_info=True)
+            continue
+
+        # Add text file tasks
+        for text_file in text_files:
+            all_text_task_args.append(
+                (
+                    text_file,
+                    model,
+                    paths["reading_output"],
+                    paths["reading_processed"],
+                    new_outputs_dir,
+                    True,  # is_reading
+                    class_name,  # for tracking
+                )
+            )
+
+        # Add PDF file tasks
+        for pdf_file in pdf_files:
+            all_pdf_task_args.append(
+                (
+                    pdf_file,
+                    model,
+                    paths["reading_output"],
+                    paths["reading_processed"],
+                    new_outputs_dir,
+                    class_name,  # for tracking
+                )
+            )
+
+    total_files = len(all_text_task_args) + len(all_pdf_task_args)
+    if total_files == 0:
+        logger.info("No reading files found in any class")
+        return
+
+    logger.info(f"Total reading files to process: {total_files}")
+
+    # Track results by class
+    class_results = {name: {"successful": 0, "failed": 0} for name in class_file_counts}
+    total_successful = 0
+    total_failed = 0
+
+    # Process ALL files from ALL classes in a single thread pool
+    with ThreadPoolExecutor(max_workers=config.MAX_LLM_WORKERS) as executor:
+        # Submit text file tasks
+        text_futures = {
+            executor.submit(process_single_file, args[:6]): args
+            for args in all_text_task_args
+        }
+        # Submit PDF file tasks
+        pdf_futures = {
+            executor.submit(process_single_pdf, args[:5]): args
+            for args in all_pdf_task_args
+        }
+
+        all_futures = {**text_futures, **pdf_futures}
+
+        for future in as_completed(all_futures):
+            args = all_futures[future]
+            input_file = args[0]
+            class_name = args[-1]  # Last element is class_name
+
+            try:
+                success, message, original_file = future.result()
+
+                if success:
+                    total_successful += 1
+                    class_results[class_name]["successful"] += 1
+                    logger.info(
+                        f"✓ [{class_name}] [{total_successful + total_failed}/{total_files}] {original_file.name}"
+                    )
+                else:
+                    total_failed += 1
+                    class_results[class_name]["failed"] += 1
+                    logger.info(
+                        f"✗ [{class_name}] [{total_successful + total_failed}/{total_files}] {original_file.name}: {message}"
+                    )
+
+            except Exception as e:
+                total_failed += 1
+                class_results[class_name]["failed"] += 1
+                logger.error(
+                    f"Unexpected error processing {input_file.name}: {e}", exc_info=True
+                )
+                logger.info(
+                    f"✗ [{class_name}] [{total_successful + total_failed}/{total_files}] {input_file.name}: Unexpected error: {e}"
+                )
+
+    # Print per-class summary
+    logger.info("─" * 70)
+    logger.info("Per-class summary:")
+    for class_name, results in class_results.items():
+        if results["successful"] > 0 or results["failed"] > 0:
+            logger.info(
+                f"  {class_name}: {results['successful']} successful, {results['failed']} failed"
+            )
 
     logger.info("─" * 70)
     logger.info(
