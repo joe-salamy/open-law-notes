@@ -112,9 +112,41 @@ def get_audio_files(class_folder: Path) -> List[Path]:
     return audio_files
 
 
+def get_text_files(class_folder: Path, reading: bool = False) -> List[Path]:
+    """
+    Get all text-based files (TXT and MD) from lecture-input or reading-input folder.
+
+    Args:
+        class_folder: Path to the class root folder
+        reading: If True, get reading files; if False, get lecture files
+
+    Returns:
+        List of paths to TXT and MD files
+    """
+    paths = get_class_paths(class_folder)
+    input_folder = paths["reading_input"] if reading else paths["lecture_input"]
+    file_type = "reading" if reading else "lecture"
+
+    logger.debug(f"Searching for {file_type} text files in: {input_folder}")
+
+    if not input_folder.exists():
+        logger.debug(f"Input folder does not exist: {input_folder}")
+        return []
+
+    txt_files = list(input_folder.glob("*.txt"))
+    md_files = list(input_folder.glob("*.md"))
+    text_files = txt_files + md_files
+    logger.debug(
+        f"Found {len(text_files)} {file_type} text files ({len(txt_files)} txt, {len(md_files)} md) in {input_folder}"
+    )
+    return text_files
+
+
 def get_txt_files(class_folder: Path, reading: bool = False) -> List[Path]:
     """
     Get all TXT files from lecture-input or reading-input folder.
+
+    DEPRECATED: Use get_text_files() instead to include both TXT and MD files.
 
     Args:
         class_folder: Path to the class root folder
@@ -136,3 +168,29 @@ def get_txt_files(class_folder: Path, reading: bool = False) -> List[Path]:
     txt_files = list(input_folder.glob("*.txt"))
     logger.debug(f"Found {len(txt_files)} {file_type} TXT files in {input_folder}")
     return txt_files
+
+
+def get_pdf_files(class_folder: Path, reading: bool = True) -> List[Path]:
+    """
+    Get all PDF files from reading-input or lecture-input folder.
+
+    Args:
+        class_folder: Path to the class root folder
+        reading: If True, get reading PDFs; if False, get lecture PDFs
+
+    Returns:
+        List of paths to PDF files
+    """
+    paths = get_class_paths(class_folder)
+    input_folder = paths["reading_input"] if reading else paths["lecture_input"]
+    file_type = "reading" if reading else "lecture"
+
+    logger.debug(f"Searching for {file_type} PDF files in: {input_folder}")
+
+    if not input_folder.exists():
+        logger.debug(f"Input folder does not exist: {input_folder}")
+        return []
+
+    pdf_files = list(input_folder.glob("*.pdf"))
+    logger.debug(f"Found {len(pdf_files)} {file_type} PDF files in {input_folder}")
+    return pdf_files

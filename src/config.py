@@ -22,7 +22,7 @@ CLASSES = [
 WHISPER_MODEL = "tiny"
 
 # Gemini model configuration
-GEMINI_MODEL = "gemini-2.5-pro"
+GEMINI_MODEL = "gemini-3-pro-preview"
 
 # Number of parallel processes/threads
 MAX_AUDIO_WORKERS = 3  # Multiprocessing for CPU-intensive transcription

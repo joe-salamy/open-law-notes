@@ -12,7 +12,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 
 import config
-from folder_manager import get_class_paths, get_txt_files
+from folder_manager import get_class_paths, get_text_files, get_pdf_files
 from file_mover import move_to_processed, copy_to_new_outputs
 from logger_config import get_logger
 
@@ -102,6 +102,150 @@ def process_with_gemini(
             continue
 
 
+def upload_pdf_to_gemini(
+    filepath: Path, max_retries: int = 3
+) -> Optional[genai.types.File]:
+    """
+    Upload a PDF file to Gemini and return the file object.
+
+    Args:
+        filepath: Path to the PDF file
+        max_retries: Number of upload attempts
+
+    Returns:
+        Gemini File object or None if upload failed
+    """
+    logger.debug(f"Uploading PDF to Gemini: {filepath.name}")
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            logger.debug(f"Upload attempt {attempt}/{max_retries}")
+            uploaded_file = genai.upload_file(filepath)
+            logger.debug(f"PDF uploaded successfully: {uploaded_file.name}")
+            return uploaded_file
+        except Exception as e:
+            if attempt == max_retries:
+                logger.error(
+                    f"PDF upload failed after {max_retries} attempts: {e}",
+                    exc_info=True,
+                )
+                return None
+            backoff = 2 ** (attempt - 1)
+            logger.warning(
+                f"PDF upload error on attempt {attempt}, retrying in {backoff}s: {e}"
+            )
+            time.sleep(backoff)
+            continue
+
+
+def process_pdf_with_gemini(
+    model: genai.GenerativeModel,
+    uploaded_file: genai.types.File,
+    prompt: str = "Process this PDF document.",
+    max_retries: int = 3,
+) -> Optional[str]:
+    """
+    Process an uploaded PDF with Gemini.
+
+    Args:
+        model: Pre-configured GenerativeModel instance
+        uploaded_file: Gemini File object from upload_pdf_to_gemini
+        prompt: Text prompt to accompany the PDF
+        max_retries: Number of attempts
+
+    Returns:
+        Generated text or None if error
+    """
+    logger.debug(f"Processing PDF with Gemini: {uploaded_file.name}")
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            logger.debug(f"Gemini API call attempt {attempt}/{max_retries}")
+            response = model.generate_content([prompt, uploaded_file])
+            logger.debug(f"Gemini response received ({len(response.text)} characters)")
+            return response.text
+        except Exception as e:
+            if attempt == max_retries:
+                logger.error(
+                    f"Gemini API error after {max_retries} attempts: {e}", exc_info=True
+                )
+                return None
+            backoff = 2 ** (attempt - 1)
+            logger.warning(
+                f"Gemini API error on attempt {attempt}, retrying in {backoff}s: {e}"
+            )
+            time.sleep(backoff)
+            continue
+
+
+def process_single_pdf(
+    args: Tuple[Path, genai.GenerativeModel, Path, Path, Path],
+) -> Tuple[bool, str, Path]:
+    """
+    Process a single PDF file with Gemini.
+
+    Args:
+        args: Tuple of (input_file, model, output_folder, processed_folder, new_outputs_dir)
+
+    Returns:
+        Tuple of (success, message, input_file)
+    """
+    (
+        input_file,
+        model,
+        output_folder,
+        processed_folder,
+        new_outputs_dir,
+    ) = args
+
+    try:
+        logger.debug(f"Processing PDF file: {input_file.name}")
+
+        # Upload PDF to Gemini
+        uploaded_file = upload_pdf_to_gemini(input_file)
+        if uploaded_file is None:
+            logger.error(f"Failed to upload PDF: {input_file.name}")
+            return False, "Failed to upload PDF", input_file
+
+        # Process with Gemini using the uploaded file
+        logger.debug(f"Sending PDF to Gemini: {input_file.name}")
+        result = process_pdf_with_gemini(
+            model, uploaded_file, "Process this reading material."
+        )
+        if result is None:
+            logger.error(f"Gemini API error for PDF: {input_file.name}")
+            return False, "Gemini API error", input_file
+
+        # Save output markdown
+        output_file = output_folder / f"{input_file.stem}.md"
+        logger.debug(f"Saving output to: {output_file}")
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(result)
+        logger.debug(f"Output saved: {output_file.name}")
+
+        # Copy to new-outputs-safe-delete
+        logger.debug(f"Copying to new-outputs: {output_file.name}")
+        copy_to_new_outputs(output_file, new_outputs_dir)
+
+        # Move input to processed
+        logger.debug(f"Moving to processed: {input_file.name}")
+        move_to_processed(input_file, processed_folder)
+
+        # Clean up uploaded file from Gemini
+        try:
+            genai.delete_file(uploaded_file.name)
+            logger.debug(f"Deleted uploaded file from Gemini: {uploaded_file.name}")
+        except Exception as e:
+            logger.warning(f"Failed to delete uploaded file from Gemini: {e}")
+
+        logger.info(f"Successfully processed: {input_file.name}")
+        return True, "Success", input_file
+
+    except Exception as e:
+        logger.error(f"Error processing {input_file.name}: {e}", exc_info=True)
+        return False, f"Error: {str(e)}", input_file
+
+
 def process_single_file(
     args: Tuple[Path, genai.GenerativeModel, Path, Path, Path, bool],
 ) -> Tuple[bool, str, Path]:
@@ -167,7 +311,7 @@ def execute_parallel_processing(
     total_files: int,
 ) -> Tuple[int, int]:
     """
-    Execute parallel processing of files using ThreadPoolExecutor.
+    Execute parallel processing of text files using ThreadPoolExecutor.
 
     Args:
         task_args: List of argument tuples for process_single_file
@@ -180,7 +324,7 @@ def execute_parallel_processing(
     failed = 0
 
     logger.debug(
-        f"Starting parallel processing of {total_files} files with {config.MAX_LLM_WORKERS} workers"
+        f"Starting parallel processing of {total_files} text files with {config.MAX_LLM_WORKERS} workers"
     )
     # Process files in parallel with threads (I/O bound)
     with ThreadPoolExecutor(max_workers=config.MAX_LLM_WORKERS) as executor:
@@ -189,7 +333,7 @@ def execute_parallel_processing(
         }
 
         for future in as_completed(futures):
-            txt_file = futures[future]
+            input_file = futures[future]
             try:
                 success, message, original_file = future.result()
 
@@ -209,14 +353,73 @@ def execute_parallel_processing(
             except Exception as e:
                 failed += 1
                 logger.error(
-                    f"Unexpected error processing {txt_file.name}: {e}", exc_info=True
+                    f"Unexpected error processing {input_file.name}: {e}", exc_info=True
                 )
                 logger.info(
-                    f"✗ [{successful + failed}/{total_files}] {txt_file.name}: Unexpected error: {e}"
+                    f"✗ [{successful + failed}/{total_files}] {input_file.name}: Unexpected error: {e}"
                 )
 
     logger.debug(
         f"Parallel processing complete: {successful} successful, {failed} failed"
+    )
+    return successful, failed
+
+
+def execute_parallel_pdf_processing(
+    task_args: List[Tuple[Path, genai.GenerativeModel, Path, Path, Path]],
+    total_files: int,
+) -> Tuple[int, int]:
+    """
+    Execute parallel processing of PDF files using ThreadPoolExecutor.
+
+    Args:
+        task_args: List of argument tuples for process_single_pdf
+        total_files: Total number of PDF files to process
+
+    Returns:
+        Tuple of (successful_count, failed_count)
+    """
+    successful = 0
+    failed = 0
+
+    logger.debug(
+        f"Starting parallel processing of {total_files} PDF files with {config.MAX_LLM_WORKERS} workers"
+    )
+    # Process files in parallel with threads (I/O bound)
+    with ThreadPoolExecutor(max_workers=config.MAX_LLM_WORKERS) as executor:
+        futures = {
+            executor.submit(process_single_pdf, args): args[0] for args in task_args
+        }
+
+        for future in as_completed(futures):
+            input_file = futures[future]
+            try:
+                success, message, original_file = future.result()
+
+                if success:
+                    successful += 1
+                    logger.info(
+                        f"✓ [{successful + failed}/{total_files}] {original_file.name}"
+                    )
+                    logger.debug(f"Successfully processed PDF {original_file.name}")
+                else:
+                    failed += 1
+                    logger.info(
+                        f"✗ [{successful + failed}/{total_files}] {original_file.name}: {message}"
+                    )
+                    logger.error(f"Failed to process PDF {original_file.name}: {message}")
+
+            except Exception as e:
+                failed += 1
+                logger.error(
+                    f"Unexpected error processing PDF {input_file.name}: {e}", exc_info=True
+                )
+                logger.info(
+                    f"✗ [{successful + failed}/{total_files}] {input_file.name}: Unexpected error: {e}"
+                )
+
+    logger.debug(
+        f"PDF parallel processing complete: {successful} successful, {failed} failed"
     )
     return successful, failed
 
@@ -226,6 +429,7 @@ def process_class_files(
 ) -> Tuple[int, int]:
     """
     Process all files (reading or lecture) for a single class.
+    Handles text files (txt, md) and PDF files.
 
     Args:
         class_folder: Path to the class root folder
@@ -241,13 +445,15 @@ def process_class_files(
 
     # Get appropriate folders and files
     if is_reading:
-        txt_files = get_txt_files(class_folder, reading=True)
+        text_files = get_text_files(class_folder, reading=True)
+        pdf_files = get_pdf_files(class_folder, reading=True)
         output_folder = paths["reading_output"]
         processed_folder = paths["reading_processed"]
         prompt_file = config.READING_PROMPT_FILE
         file_type = "reading"
     else:
-        txt_files = get_txt_files(class_folder, reading=False)
+        text_files = get_text_files(class_folder, reading=False)
+        pdf_files = get_pdf_files(class_folder, reading=False)
         output_folder = paths["lecture_output"]
         processed_folder = paths["lecture_processed_txt"]
         prompt_file = config.LECTURE_PROMPT_FILE
@@ -255,12 +461,14 @@ def process_class_files(
 
     logger.debug(f"Processing {file_type} files for {class_name}")
 
-    if not txt_files:
+    total_files = len(text_files) + len(pdf_files)
+    if total_files == 0:
         logger.info(f"No {file_type} files found")
         return 0, 0
 
-    logger.info(f"Found {len(txt_files)} {file_type} file(s)")
-    logger.debug(f"{file_type} files: {[f.name for f in txt_files]}")
+    logger.info(f"Found {total_files} {file_type} file(s) ({len(text_files)} text, {len(pdf_files)} PDF)")
+    logger.debug(f"{file_type} text files: {[f.name for f in text_files]}")
+    logger.debug(f"{file_type} PDF files: {[f.name for f in pdf_files]}")
 
     # Load system prompt
     try:
@@ -270,11 +478,11 @@ def process_class_files(
         if system_prompt is None:
             logger.error(f"Error loading prompt for {class_name}")
             logger.info(f"✗ Error loading prompt")
-            return 0, len(txt_files)
+            return 0, total_files
     except Exception as e:
         logger.error(f"Error loading prompt for {class_name}: {e}", exc_info=True)
         logger.info(f"✗ Error loading prompt: {e}")
-        return 0, len(txt_files)
+        return 0, total_files
 
     # Configure API and create a single GenerativeModel for this class.
     # Calling genai.configure once and reusing a model instance reduces per-task overhead.
@@ -291,24 +499,48 @@ def process_class_files(
             f"Error creating GenerativeModel for {class_name}: {e}", exc_info=True
         )
         logger.info(f"✗ Error creating GenerativeModel: {e}")
-        return 0, len(txt_files)
+        return 0, total_files
 
-    # Prepare arguments for parallel processing: pass the shared model into each task.
-    task_args = [
-        (
-            txt_file,
-            model,
-            output_folder,
-            processed_folder,
-            new_outputs_dir,
-            is_reading,
-        )
-        for txt_file in txt_files
-    ]
+    total_successful = 0
+    total_failed = 0
 
-    # Execute parallel processing
-    logger.debug(f"Starting parallel processing for {class_name}")
-    return execute_parallel_processing(task_args, len(txt_files))
+    # Process text files (txt, md)
+    if text_files:
+        logger.debug(f"Processing {len(text_files)} text files for {class_name}")
+        text_task_args = [
+            (
+                text_file,
+                model,
+                output_folder,
+                processed_folder,
+                new_outputs_dir,
+                is_reading,
+            )
+            for text_file in text_files
+        ]
+        successful, failed = execute_parallel_processing(text_task_args, len(text_files))
+        total_successful += successful
+        total_failed += failed
+
+    # Process PDF files
+    if pdf_files:
+        logger.debug(f"Processing {len(pdf_files)} PDF files for {class_name}")
+        pdf_task_args = [
+            (
+                pdf_file,
+                model,
+                output_folder,
+                processed_folder,
+                new_outputs_dir,
+            )
+            for pdf_file in pdf_files
+        ]
+        successful, failed = execute_parallel_pdf_processing(pdf_task_args, len(pdf_files))
+        total_successful += successful
+        total_failed += failed
+
+    logger.debug(f"Completed processing for {class_name}: {total_successful} successful, {total_failed} failed")
+    return total_successful, total_failed
 
 
 def process_all_lectures(classes: List[Path], new_outputs_dir: Path) -> None:
