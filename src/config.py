@@ -10,11 +10,15 @@ from pathlib import Path
 # List of class folders - add or remove as needed
 CLASSES = [
     Path("C:\\Users\\joesa\\OneDrive\\Documents\\Law school\\Con Law"),
+    Path("C:\\Users\\joesa\\OneDrive\\Documents\\Law school\\LRW"),
     Path("C:\\Users\\joesa\\OneDrive\\Documents\\Law school\\Property"),
     Path("C:\\Users\\joesa\\OneDrive\\Documents\\Law school\\Quant Methods"),
 ]
 
 # ========== PROCESSING SETTINGS ==========
+
+# Toggle this to True to only process readings (skip audio processing and Google Drive operations)
+READING_ONLY_MODE = True
 
 # Whisper model size for transcription
 # Options: 'tiny', 'base', 'small', 'medium', 'large'
@@ -26,7 +30,7 @@ WHISPER_MODEL = "tiny"
 # 2.5 Pro gives longer responses than 3 Pro, for whatever reason (maybe trying to preserve tokens on highest-demand model?)
 GEMINI_MODEL = "gemini-2.5-pro"
 GEMINI_MAX_OUTPUT_TOKENS = 10000
-GEMINI_TEMPERATURE = 0.9
+GEMINI_TEMPERATURE = 0.8
 
 # Number of parallel processes/threads
 MAX_AUDIO_WORKERS = 3  # Multiprocessing for CPU-intensive transcription

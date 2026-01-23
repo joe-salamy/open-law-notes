@@ -5,7 +5,7 @@ Processes lecture audio and reading text files for multiple classes.
 
 import sys
 from pathlib import Path
-from config import CLASSES
+from config import CLASSES, READING_ONLY_MODE
 from llm_processor import process_all_readings, process_all_lectures
 from folder_manager import verify_and_create_folders
 from file_mover import setup_output_directory
@@ -15,9 +15,6 @@ from logger_config import setup_logging, get_logger
 
 # Initialize logger
 logger = get_logger(__name__)
-
-# Toggle this to True to only process readings (skip Steps 0, 2, and 3)
-READING_ONLY_MODE = False
 
 
 def main():
