@@ -46,7 +46,7 @@ def verify_and_create_folders(class_folder: Path) -> None:
         llm_base / config.READING_PROCESSED,
     ]
 
-    logger.debug(f"Creating {len(required_folders)} required folders")
+    logger.debug(f"Verifying {len(required_folders)} required folders")
     # Create all folders
     for folder in required_folders:
         try:

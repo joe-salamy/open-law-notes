@@ -125,7 +125,14 @@ def transcribe_single_file(
         global _WORKER_MODEL
         if _WORKER_MODEL is None:
             logger.error(f"[ERROR] Model not loaded in worker for {audio_file.name}")
-            return False, "Model not loaded in worker", audio_file, None, processed_audio_folder, class_name
+            return (
+                False,
+                "Model not loaded in worker",
+                audio_file,
+                None,
+                processed_audio_folder,
+                class_name,
+            )
 
         logger.debug(f"[MODEL CHECK] Worker model ready for {audio_file.name}")
 
@@ -231,11 +238,25 @@ def transcribe_single_file(
         logger.info(f"[SAVE COMPLETE] {txt_filename}")
         logger.info(f"[WORKER COMPLETE] ✓ Successfully transcribed: {audio_file.name}")
         logger.info(f"Preprocessed WAV saved as: {wav_filename}")
-        return True, "Successfully transcribed", audio_file, wav_file_path, processed_audio_folder, class_name
+        return (
+            True,
+            "Successfully transcribed",
+            audio_file,
+            wav_file_path,
+            processed_audio_folder,
+            class_name,
+        )
 
     except Exception as e:
         logger.error(f"Error transcribing {audio_file.name}: {e}", exc_info=True)
-        return False, f"Error: {str(e)}", audio_file, None, processed_audio_folder, class_name
+        return (
+            False,
+            f"Error: {str(e)}",
+            audio_file,
+            None,
+            processed_audio_folder,
+            class_name,
+        )
 
 
 def process_class_lectures(
@@ -409,12 +430,14 @@ def process_all_lectures(classes: List[Path]) -> None:
 
         for audio_file in audio_files:
             # Include processed_audio_folder and class_name for post-processing
-            all_task_args.append((
-                audio_file,
-                paths["lecture_input"],
-                paths["lecture_processed_audio"],
-                class_name
-            ))
+            all_task_args.append(
+                (
+                    audio_file,
+                    paths["lecture_input"],
+                    paths["lecture_processed_audio"],
+                    class_name,
+                )
+            )
 
     # Log what we found
     for class_name, count in class_file_counts.items():
@@ -453,15 +476,25 @@ def process_all_lectures(classes: List[Path]) -> None:
         initargs=(model_name, device, compute_type, cpu_threads, log_file_path),
     ) as executor:
         futures = {
-            executor.submit(transcribe_single_file, args): args for args in all_task_args
+            executor.submit(transcribe_single_file, args): args
+            for args in all_task_args
         }
 
-        with tqdm(total=total_files, desc="Transcribing (all classes)", unit="file") as pbar:
+        with tqdm(
+            total=total_files, desc="Transcribing (all classes)", unit="file"
+        ) as pbar:
             for future in as_completed(futures):
                 args = futures[future]
                 audio_file = args[0]
                 try:
-                    success, message, original_file, wav_file, processed_audio_folder, class_name = future.result()
+                    (
+                        success,
+                        message,
+                        original_file,
+                        wav_file,
+                        processed_audio_folder,
+                        class_name,
+                    ) = future.result()
 
                     if success:
                         total_successful += 1
@@ -480,9 +513,13 @@ def process_all_lectures(classes: List[Path]) -> None:
                                 wav_file, processed_audio_folder
                             )
                             if wav_moved:
-                                logger.debug(f"WAV file moved to processed: {wav_file.name}")
+                                logger.debug(
+                                    f"WAV file moved to processed: {wav_file.name}"
+                                )
                             else:
-                                logger.warning(f"Failed to move WAV file: {wav_file.name}")
+                                logger.warning(
+                                    f"Failed to move WAV file: {wav_file.name}"
+                                )
 
                         if moved and wav_moved:
                             moved_msg = "moved to processed audio"
@@ -491,11 +528,15 @@ def process_all_lectures(classes: List[Path]) -> None:
                         else:
                             moved_msg = "failed to move audio"
 
-                        pbar.write(f"✓ [{class_name}] {original_file.name} ({moved_msg})")
+                        pbar.write(
+                            f"✓ [{class_name}] {original_file.name} ({moved_msg})"
+                        )
                     else:
                         total_failed += 1
                         class_results[class_name]["failed"] += 1
-                        logger.error(f"Transcription failed for {original_file.name}: {message}")
+                        logger.error(
+                            f"Transcription failed for {original_file.name}: {message}"
+                        )
                         pbar.write(f"✗ [{class_name}] {original_file.name}: {message}")
 
                 except Exception as e:
@@ -507,7 +548,9 @@ def process_all_lectures(classes: List[Path]) -> None:
                         f"Unexpected error processing {audio_file.name}: {e}",
                         exc_info=True,
                     )
-                    pbar.write(f"✗ [{class_name}] {audio_file.name}: Unexpected error: {e}")
+                    pbar.write(
+                        f"✗ [{class_name}] {audio_file.name}: Unexpected error: {e}"
+                    )
 
                 pbar.update(1)
 
@@ -516,7 +559,9 @@ def process_all_lectures(classes: List[Path]) -> None:
     logger.info("Per-class summary:")
     for class_name, results in class_results.items():
         if results["successful"] > 0 or results["failed"] > 0:
-            logger.info(f"  {class_name}: {results['successful']} successful, {results['failed']} failed")
+            logger.info(
+                f"  {class_name}: {results['successful']} successful, {results['failed']} failed"
+            )
 
     logger.info("─" * 70)
     logger.info(
