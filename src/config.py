@@ -18,7 +18,7 @@ CLASSES = [
 # ========== PROCESSING SETTINGS ==========
 
 # Toggle this to True to only process readings (skip audio processing and Google Drive operations)
-READING_ONLY_MODE = True
+READING_ONLY_MODE = False
 
 # Whisper model size for transcription
 # Options: 'tiny', 'base', 'small', 'medium', 'large'
@@ -26,14 +26,14 @@ READING_ONLY_MODE = True
 WHISPER_MODEL = "tiny"
 
 # Gemini model configuration
-# GEMINI_MODEL = "gemini-3-pro-preview"
 # 2.5 Pro gives longer responses than 3 Pro, for whatever reason (maybe trying to preserve tokens on highest-demand model?)
-GEMINI_MODEL = "gemini-2.5-pro"
-GEMINI_MAX_OUTPUT_TOKENS = 10000
+# GEMINI_MODEL = "gemini-2.5-pro"
+GEMINI_MODEL = "gemini-3-pro-preview"
+GEMINI_MAX_OUTPUT_TOKENS = 32768  # 2^15, max is 2^16 for 3 Pro
 GEMINI_TEMPERATURE = 0.8
 
 # Number of parallel processes/threads
-MAX_AUDIO_WORKERS = 3  # Multiprocessing for CPU-intensive transcription
+MAX_AUDIO_WORKERS = 2  # Multiprocessing for CPU-intensive transcription
 MAX_LLM_WORKERS = 5  # Multithreading for I/O-bound API calls
 
 # ========== FOLDER STRUCTURE ==========

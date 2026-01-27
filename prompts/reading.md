@@ -6,9 +6,9 @@
 
 **Content Requirements**: Your output must be organized into these four main sections, formatted exactly as follows:
 
-### **{Legal Topics}**
+### **{{Legal Topics}}**
 
-_(This title should consist only of the specific legal topics discussed in the reading.)_
+(_This title should consist only of the specific legal topics discussed in the reading._)
 
 **High-Level Overview** Provide a 2-3 sentence summary outlining the core legal principles and takeaways from the assigned text.
 
@@ -18,7 +18,7 @@ _(This title should consist only of the specific legal topics discussed in the r
 - **Jargon**: **Bold** all legal terms.
 - **Public Policy**: Identify specific policy arguments mentioned in the text.
 
-For any specific legal cases mentioned, use this structure:
+You must identify and perform a full analysis for **every single legal case** mentioned, cited, or discussed in the text, including those found in the notes and questions following a main case. Do not omit any cases. Use this structure for each identified case:
 
 - **Case Name**: Include jurisdiction and year (if available).
   - **Facts**: Each sentence must be a separate bullet point.
@@ -27,6 +27,8 @@ For any specific legal cases mentioned, use this structure:
   - **Holding**: The court's decision.
   - **Reasoning**: The logic used.
   - **Disposition**: The final order (e.g., Affirmed).
+
+Exclude any components above not explicitly mentioned in the source text from your final output.
 
 **Analysis of Notes and Questions** Address any notes or questions included in the casebook reading:
 
