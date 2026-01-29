@@ -18,7 +18,7 @@ CLASSES = [
 # ========== PROCESSING SETTINGS ==========
 
 # Toggle this to True to only process readings (skip audio processing and Google Drive operations)
-READING_ONLY_MODE = False
+READING_ONLY_MODE = True
 
 # Whisper model size for transcription
 # Options: 'tiny', 'base', 'small', 'medium', 'large'

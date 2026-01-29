@@ -22,7 +22,7 @@
 - **Professor’s Tips**: Highlight every comment regarding exam content, format, or how to "write like a lawyer."
 - **Concrete Details**: Include specific examples or line-of-reasoning steps mentioned by the professor to explain a rule.
 
-You must identify and perform a full analysis for **every single legal case** mentioned or discussed in the transcript, regardless of the depth of the mention. Use this structure for each:
+You must identify and perform a full case brief for **every single legal case** mentioned or discussed in the transcript, regardless of the depth of the mention. Use this structure for each:
 
 - **Case Name**: Include jurisdiction and year (if available).
   - **Facts**: Each sentence must be a separate bullet point.
@@ -33,7 +33,7 @@ You must identify and perform a full analysis for **every single legal case** me
   - **Concurrences/Dissents**: Detail any alternative viewpoints or separate opinions mentioned.
   - **Disposition**: The final order (e.g., Affirmed, Reversed).
 
-Exclude any components above not explicitly mentioned in the source text.
+Exclude any case brief components above not explicitly mentioned in the source text. Integrate each case brief immediately following its mention or analysis within the primary notes. Do not aggregate them into a separate appendix or concluding section.
 
 **Analysis of Notes, Questions, and Hypotheticals** Identify and answer every potential exam question and hypothetical scenario mentioned by the professor. Provide a detailed breakdown of:
 

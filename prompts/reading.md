@@ -28,7 +28,7 @@ You must identify and perform a full analysis for **every single legal case** me
   - **Reasoning**: The logic used.
   - **Disposition**: The final order (e.g., Affirmed).
 
-Exclude any components above not explicitly mentioned in the source text from your final output.
+Exclude any case brief components above not explicitly mentioned in the source text. Integrate each case brief immediately following its mention or analysis within the primary notes. Do not aggregate them into a separate appendix or concluding section.
 
 **Analysis of Notes and Questions** Address any notes or questions included in the casebook reading:
 
