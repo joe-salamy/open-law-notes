@@ -155,15 +155,40 @@ def transcribe_single_file(
         logger.debug(f"Saved preprocessed audio to {wav_filename}")
 
         # Step 2: Transcribe with timestamps
-        logger.info(
-            f"[TRANSCRIPTION START] {audio_file.name} - Will take ~{(3*duration_minutes):.1f} minutes"
-        )
-        segments, info = _WORKER_MODEL.transcribe(
-            str(wav_file_path),
-            beam_size=5,
-            language="en",
-            word_timestamps=False,  # Use segment-level timestamps
-        )
+        if config.USE_CLOUD_GPU:
+            # Cloud GPU: network overhead + GPU processing (~10x real-time)
+            network_overhead = 3  # minutes for upload
+            gpu_time = duration_minutes / 10
+            estimated_minutes = network_overhead + gpu_time
+            eta_msg = f"Will take ~{estimated_minutes:.1f} minutes (cloud GPU)"
+        else:
+            # Local CPU: ~3x real-time
+            estimated_minutes = 3 * duration_minutes
+            eta_msg = f"Will take ~{estimated_minutes:.1f} minutes (local CPU)"
+
+        logger.info(f"[TRANSCRIPTION START] {audio_file.name} - {eta_msg}")
+
+        if config.USE_CLOUD_GPU:
+            # Use cloud GPU transcription
+            from transcribe_client import TranscribeClient
+
+            client = TranscribeClient(config.CLOUD_API_URL, config.CLOUD_API_KEY)
+            segments_raw, info = client.transcribe(
+                wav_file_path,
+                beam_size=5,
+                language="en",
+                word_timestamps=False,
+            )
+            # Convert to list for compatibility with existing code
+            segments = list(segments_raw)
+        else:
+            # Fallback to local CPU model
+            segments, info = _WORKER_MODEL.transcribe(
+                str(wav_file_path),
+                beam_size=5,
+                language="en",
+                word_timestamps=False,  # Use segment-level timestamps
+            )
 
         # Process segments as they're generated (this is the bottleneck)
         start_time = time.time()

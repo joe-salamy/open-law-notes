@@ -3,6 +3,7 @@ Configuration settings for law school note generator.
 Edit the class folders list to match your directory structure.
 """
 
+import os
 from pathlib import Path
 
 # ========== EDIT THESE PATHS ==========
@@ -24,6 +25,25 @@ READING_ONLY_MODE = True
 # Options: 'tiny', 'base', 'small', 'medium', 'large'
 # 'tiny' = fastest, 'large' = most accurate
 WHISPER_MODEL = "tiny"
+
+# ========== CLOUD GPU SETTINGS ==========
+
+# Toggle between cloud GPU (Salad) and local CPU
+USE_CLOUD_GPU = True  # Set to False to use local CPU
+
+# Salad API configuration (only used if USE_CLOUD_GPU = True)
+CLOUD_API_URL = os.getenv(
+    "SALAD_API_URL", "https://your-deployment.salad.cloud/transcribe"
+)
+CLOUD_API_KEY = os.getenv("SALAD_API_KEY")  # Required for authentication
+
+# Validate cloud GPU configuration
+if USE_CLOUD_GPU:
+    if not CLOUD_API_KEY:
+        raise ValueError(
+            "SALAD_API_KEY environment variable is required when USE_CLOUD_GPU=True. "
+            "Please set it in your .env file."
+        )
 
 # Gemini model configuration
 # 2.5 Pro gives longer responses than 3 Pro, for whatever reason (maybe trying to preserve tokens on highest-demand model?)
