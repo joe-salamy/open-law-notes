@@ -1,4 +1,7 @@
 """FastAPI server for cloud GPU transcription with faster-whisper."""
+
+"""Note: Warnings are okay in this file, since it runs in Docker (not locally)."""
+
 import os
 import tempfile
 from pathlib import Path
@@ -10,8 +13,9 @@ import uvicorn
 
 app = FastAPI(title="Faster-Whisper Cloud GPU API")
 
-# Global model instance (loaded once on startup)
+# Global model instances (loaded once on startup)
 MODEL = None
+DIARIZATION_PIPELINE = None
 
 # API Key for authentication (set via environment variable)
 API_KEY = os.getenv("SALAD_API_KEY")
@@ -28,18 +32,19 @@ def verify_api_key(authorization: str = Header(None)) -> None:
     # Expected format: "Bearer <api_key>"
     parts = authorization.split()
     if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(status_code=401, detail="Invalid authorization header format")
+        raise HTTPException(
+            status_code=401, detail="Invalid authorization header format"
+        )
 
     provided_key = parts[1]
     if provided_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
-
 @app.on_event("startup")
 async def load_model():
-    """Load faster-whisper model on GPU at startup."""
-    global MODEL
+    """Load faster-whisper model and diarization pipeline on GPU at startup."""
+    global MODEL, DIARIZATION_PIPELINE
     model_name = os.getenv("MODEL_NAME", "large-v3")
     compute_type = os.getenv("COMPUTE_TYPE", "float16")
 
@@ -48,9 +53,29 @@ async def load_model():
         model_name,
         device="cuda",
         compute_type=compute_type,
-        download_root="/models"  # Cache models
+        download_root="/models",  # Cache models
     )
     print(f"✓ Model loaded successfully")
+
+    # Load pyannote diarization if HF_TOKEN provided
+    hf_token = os.getenv("HF_TOKEN")
+    if hf_token:
+        try:
+            from pyannote.audio import Pipeline
+            import torch
+
+            print(f"Loading pyannote.audio diarization pipeline...")
+            DIARIZATION_PIPELINE = Pipeline.from_pretrained(
+                "pyannote/speaker-diarization-3.1", use_auth_token=hf_token
+            )
+            DIARIZATION_PIPELINE.to(torch.device("cuda"))
+            print(f"✓ Diarization pipeline loaded successfully")
+        except Exception as e:
+            print(f"Warning: Failed to load diarization pipeline: {e}")
+            print(f"Transcription will work, but diarization will be unavailable")
+            DIARIZATION_PIPELINE = None
+    else:
+        print(f"HF_TOKEN not set - diarization will be unavailable")
 
 
 @app.get("/health")
@@ -67,7 +92,10 @@ async def transcribe_audio(
     beam_size: int = Form(5),
     language: str = Form("en"),
     word_timestamps: bool = Form(False),
-    authorization: str = Header(None)
+    enable_diarization: bool = Form(False),
+    min_speakers: int = Form(None),
+    max_speakers: int = Form(None),
+    authorization: str = Header(None),
 ) -> Dict[str, Any]:
     """
     Transcribe uploaded WAV file using faster-whisper on GPU.
@@ -77,10 +105,13 @@ async def transcribe_audio(
         beam_size: Beam size for transcription (default: 5)
         language: Language code (default: en)
         word_timestamps: Include word-level timestamps (default: False)
+        enable_diarization: Enable speaker diarization (default: False)
+        min_speakers: Minimum number of speakers (optional)
+        max_speakers: Maximum number of speakers (optional)
         authorization: Bearer token for authentication
 
     Returns:
-        JSON with segments and info
+        JSON with segments, speaker_segments (if diarization enabled), and info
     """
     # Verify API key
     verify_api_key(authorization)
@@ -101,17 +132,12 @@ async def transcribe_audio(
             temp_file,
             beam_size=beam_size,
             language=language,
-            word_timestamps=word_timestamps
+            word_timestamps=word_timestamps,
         )
 
         # Convert segments to JSON-serializable format
         segments_list = [
-            {
-                "id": seg.id,
-                "start": seg.start,
-                "end": seg.end,
-                "text": seg.text
-            }
+            {"id": seg.id, "start": seg.start, "end": seg.end, "text": seg.text}
             for seg in segments
         ]
 
@@ -119,12 +145,32 @@ async def transcribe_audio(
         info_dict = {
             "language": info.language,
             "language_probability": info.language_probability,
-            "duration": info.duration
+            "duration": info.duration,
         }
+
+        # Run diarization if enabled
+        speaker_segments = None
+        if enable_diarization and DIARIZATION_PIPELINE:
+            try:
+                diarization_kwargs = {}
+                if min_speakers is not None:
+                    diarization_kwargs["min_speakers"] = min_speakers
+                if max_speakers is not None:
+                    diarization_kwargs["max_speakers"] = max_speakers
+
+                diarization = DIARIZATION_PIPELINE(temp_file, **diarization_kwargs)
+                speaker_segments = [
+                    {"start": turn.start, "end": turn.end, "speaker": speaker}
+                    for turn, _, speaker in diarization.itertracks(yield_label=True)
+                ]
+            except Exception as e:
+                print(f"Warning: Diarization failed: {e}")
+                speaker_segments = None
 
         return {
             "segments": segments_list,
-            "info": info_dict
+            "speaker_segments": speaker_segments,
+            "info": info_dict,
         }
 
     except Exception as e:

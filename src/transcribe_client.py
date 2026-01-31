@@ -35,10 +35,13 @@ class TranscribeClient:
         beam_size: int = 5,
         language: str = "en",
         word_timestamps: bool = False,
-    ) -> Tuple[List[TranscribeSegment], Any]:
+        enable_diarization: bool = False,
+        min_speakers: int = None,
+        max_speakers: int = None,
+    ) -> Tuple[List[TranscribeSegment], Any, List[dict] | None]:
         """
         Send WAV file to cloud GPU for transcription.
-        Returns (segments, info) in same format as faster-whisper.
+        Returns (segments, info, speaker_segments) tuple.
         """
         logger.info(f"Uploading {wav_file_path.name} to cloud GPU...")
 
@@ -51,7 +54,12 @@ class TranscribeClient:
                         "beam_size": beam_size,
                         "language": language,
                         "word_timestamps": str(word_timestamps).lower(),
+                        "enable_diarization": str(enable_diarization).lower(),
                     }
+                    if min_speakers is not None:
+                        data["min_speakers"] = min_speakers
+                    if max_speakers is not None:
+                        data["max_speakers"] = max_speakers
 
                     headers = {"Authorization": f"Bearer {self.api_key}"}
 
@@ -69,10 +77,15 @@ class TranscribeClient:
                     result = response.json()
                     segments = [TranscribeSegment(seg) for seg in result["segments"]]
                     info = result.get("info", {})
+                    speaker_segments = result.get("speaker_segments")
                     logger.info(
                         f"✓ Cloud transcription complete: {len(segments)} segments"
                     )
-                    return segments, info
+                    if speaker_segments:
+                        logger.info(
+                            f"✓ Diarization complete: {len(speaker_segments)} speaker segments"
+                        )
+                    return segments, info, speaker_segments
 
                 elif response.status_code == 503:  # GPU busy
                     wait_time = 60 * (2**attempt)  # Exponential backoff

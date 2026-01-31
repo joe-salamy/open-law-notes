@@ -45,6 +45,30 @@ if USE_CLOUD_GPU:
             "Please set it in your .env file."
         )
 
+# ========== SPEAKER DIARIZATION SETTINGS ==========
+
+# Enable speaker diarization (requires HF_TOKEN and cloud GPU)
+ENABLE_DIARIZATION = False  # Set True to enable speaker identification
+
+# Optional speaker count constraints (helps accuracy if you know speaker count)
+MIN_SPEAKERS = None  # e.g., 2 for "at least 2 speakers"
+MAX_SPEAKERS = None  # e.g., 3 for "at most 3 speakers"
+
+# Validate HF_TOKEN if diarization enabled
+if ENABLE_DIARIZATION and USE_CLOUD_GPU:
+    HF_TOKEN = os.getenv("HF_TOKEN")
+    if not HF_TOKEN:
+        raise ValueError(
+            "HF_TOKEN required when ENABLE_DIARIZATION=True. "
+            "Get token from: https://huggingface.co/settings/tokens\n"
+            "Accept pyannote license: https://huggingface.co/pyannote/speaker-diarization-3.1"
+        )
+elif ENABLE_DIARIZATION and not USE_CLOUD_GPU:
+    raise ValueError(
+        "ENABLE_DIARIZATION=True requires USE_CLOUD_GPU=True. "
+        "Speaker diarization is only available on cloud GPU."
+    )
+
 # Gemini model configuration
 # 2.5 Pro gives longer responses than 3 Pro, for whatever reason (maybe trying to preserve tokens on highest-demand model?)
 # GEMINI_MODEL = "gemini-2.5-pro"

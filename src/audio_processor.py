@@ -21,7 +21,12 @@ import config
 from folder_manager import get_class_paths, get_audio_files
 from file_mover import move_audio_to_processed
 from logger_config import get_logger
-from audio_helper import preprocess_audio, format_transcription_paragraphs
+from audio_helper import (
+    preprocess_audio,
+    format_transcription_paragraphs,
+    assign_speakers_to_segments,
+    format_transcription_with_speakers,
+)
 
 # Load environment variables
 load_dotenv()
@@ -173,22 +178,26 @@ def transcribe_single_file(
             from transcribe_client import TranscribeClient
 
             client = TranscribeClient(config.CLOUD_API_URL, config.CLOUD_API_KEY)
-            segments_raw, info = client.transcribe(
+            segments_raw, info, speaker_segments = client.transcribe(
                 wav_file_path,
                 beam_size=5,
                 language="en",
                 word_timestamps=False,
+                enable_diarization=config.ENABLE_DIARIZATION,
+                min_speakers=config.MIN_SPEAKERS,
+                max_speakers=config.MAX_SPEAKERS,
             )
             # Convert to list for compatibility with existing code
             segments = list(segments_raw)
         else:
-            # Fallback to local CPU model
+            # Fallback to local CPU model (no diarization support)
             segments, info = _WORKER_MODEL.transcribe(
                 str(wav_file_path),
                 beam_size=5,
                 language="en",
                 word_timestamps=False,  # Use segment-level timestamps
             )
+            speaker_segments = None  # Local CPU doesn't support diarization
 
         # Process segments as they're generated (this is the bottleneck)
         start_time = time.time()
@@ -234,23 +243,31 @@ def transcribe_single_file(
             f"[TRANSCRIPTION COMPLETE] {audio_file.name} - Total: {total_segments} segments in {elapsed_time/60:.1f} min"
         )
 
-        # Step 3: Format transcription with paragraph-based timestamps (token-efficient)
-        transcription = format_transcription_paragraphs(
+        # Step 3: Assign speakers to segments if diarization was enabled
+        if speaker_segments:
+            logger.info(f"[SPEAKER ASSIGNMENT START] Assigning speakers to segments")
+            segments_list = assign_speakers_to_segments(segments_list, speaker_segments)
+            logger.info(f"[SPEAKER ASSIGNMENT COMPLETE] Speakers assigned to {total_segments} segments")
+
+        # Step 4: Format transcription with paragraph-based timestamps (token-efficient)
+        transcription = format_transcription_with_speakers(
             segments_list,
             paragraph_gap=3.0,  # Start new paragraph after 3+ seconds of silence
             max_paragraph_duration=120.0,  # Max 2 minutes per paragraph
+            include_speakers=bool(speaker_segments),  # Include speakers if available
         )
 
         # Count paragraphs for logging
         paragraph_count = transcription.count("[")
+        speaker_msg = " with speaker labels" if speaker_segments else ""
         logger.info(
-            f"[FORMATTING COMPLETE] {audio_file.name} - Created {paragraph_count} paragraphs from {total_segments} segments"
+            f"[FORMATTING COMPLETE] {audio_file.name} - Created {paragraph_count} paragraphs from {total_segments} segments{speaker_msg}"
         )
         logger.info(
             f"Token reduction: ~{((total_segments - paragraph_count) / total_segments * 100):.0f}% fewer timestamps"
         )
 
-        # Step 4: Save to txt file
+        # Step 5: Save to txt file
         txt_filename = audio_file.stem + ".txt"
         txt_output_path = output_folder / txt_filename
         logger.info(

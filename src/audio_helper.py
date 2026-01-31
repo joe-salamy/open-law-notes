@@ -187,3 +187,163 @@ def format_transcription_paragraphs(
         paragraphs.append(f"{timestamp}\n{paragraph_text}")
 
     return "\n".join(paragraphs)
+
+
+def format_speaker_label(speaker: str) -> str:
+    """
+    Convert SPEAKER_00 to Speaker A, SPEAKER_01 to Speaker B, etc.
+
+    Args:
+        speaker: Raw speaker label from diarization (e.g., "SPEAKER_00")
+
+    Returns:
+        Formatted speaker label (e.g., "Speaker A")
+    """
+    if not speaker or speaker == "UNKNOWN":
+        return "Unknown Speaker"
+
+    try:
+        # Extract number from SPEAKER_XX format
+        num = int(speaker.split("_")[-1])
+        letter = chr(65 + num)  # 65 is ASCII 'A'
+        return f"Speaker {letter}"
+    except (ValueError, IndexError):
+        return speaker  # Return as-is if parsing fails
+
+
+def assign_speakers_to_segments(
+    segments_list: List, speaker_segments: List[dict]
+) -> List:
+    """
+    Assign speaker labels to transcription segments via timestamp overlap.
+
+    Uses maximum overlap algorithm: each transcription segment is assigned to the speaker
+    whose time range has the most overlap with the segment's timestamps.
+
+    Args:
+        segments_list: List of transcription segments from faster-whisper
+        speaker_segments: List of speaker diarization segments with {start, end, speaker}
+
+    Returns:
+        Updated segments_list with speaker attribute added to each segment
+    """
+    for seg in segments_list:
+        seg_start, seg_end = seg.start, seg.end
+        best_speaker = None
+        max_overlap = 0.0
+
+        for spk_seg in speaker_segments:
+            # Calculate overlap duration
+            overlap_start = max(seg_start, spk_seg["start"])
+            overlap_end = min(seg_end, spk_seg["end"])
+            overlap = max(0, overlap_end - overlap_start)
+
+            if overlap > max_overlap:
+                max_overlap = overlap
+                best_speaker = spk_seg["speaker"]
+
+        # Assign speaker (or UNKNOWN if no overlap found)
+        seg.speaker = best_speaker if best_speaker else "UNKNOWN"
+
+    return segments_list
+
+
+def format_transcription_with_speakers(
+    segments_list: List,
+    paragraph_gap: float = 3.0,
+    max_paragraph_duration: float = 30.0,
+    include_speakers: bool = False,
+) -> str:
+    """
+    Format transcription into paragraphs with optional speaker labels.
+
+    Similar to format_transcription_paragraphs but adds speaker labels when available.
+    Starts new paragraphs on:
+    1. Significant pauses (>= paragraph_gap seconds)
+    2. Speaker changes
+    3. Max paragraph duration exceeded
+
+    Args:
+        segments_list: List of transcription segments (with optional speaker attribute)
+        paragraph_gap: Seconds of silence between segments to start new paragraph (default: 3.0)
+        max_paragraph_duration: Maximum duration of a paragraph in seconds (default: 30.0)
+        include_speakers: Whether to include speaker labels in output (default: False)
+
+    Returns:
+        Formatted transcription string with paragraph-based timestamps and optional speakers
+    """
+    if not segments_list:
+        return ""
+
+    paragraphs = []
+    current_paragraph = []
+    paragraph_start_time = segments_list[0].start if segments_list else 0
+    prev_end_time = paragraph_start_time
+    current_speaker = (
+        getattr(segments_list[0], "speaker", None) if segments_list else None
+    )
+
+    for segment in segments_list:
+        gap = segment.start - prev_end_time
+        segment_speaker = getattr(segment, "speaker", None)
+
+        # Calculate what duration would be if we add this segment
+        if current_paragraph:
+            duration_with_new_segment = segment.end - paragraph_start_time
+        else:
+            duration_with_new_segment = segment.end - segment.start
+
+        # Start new paragraph if:
+        # 1. Significant pause detected (topic change)
+        # 2. Speaker changed (when speakers are available)
+        # 3. Adding this segment would exceed max duration (and we have content)
+        should_break = False
+        if current_paragraph:
+            if gap >= paragraph_gap:
+                should_break = True
+            elif (
+                include_speakers
+                and segment_speaker
+                and current_speaker
+                and segment_speaker != current_speaker
+            ):
+                should_break = True
+            elif duration_with_new_segment > max_paragraph_duration:
+                should_break = True
+
+        if should_break:
+            # Save current paragraph
+            timestamp = format_timestamp(paragraph_start_time)
+            paragraph_text = " ".join(current_paragraph)
+
+            if include_speakers and current_speaker:
+                formatted_speaker = format_speaker_label(current_speaker)
+                paragraphs.append(
+                    f"{timestamp} {formatted_speaker}: {paragraph_text}\n"
+                )
+            else:
+                paragraphs.append(f"{timestamp}\n{paragraph_text}\n")
+
+            current_paragraph = []
+            paragraph_start_time = segment.start
+            current_speaker = segment_speaker
+
+        current_paragraph.append(segment.text.strip())
+        prev_end_time = segment.end
+
+        # Update current speaker if not set
+        if not current_speaker and segment_speaker:
+            current_speaker = segment_speaker
+
+    # Add final paragraph
+    if current_paragraph:
+        timestamp = format_timestamp(paragraph_start_time)
+        paragraph_text = " ".join(current_paragraph)
+
+        if include_speakers and current_speaker:
+            formatted_speaker = format_speaker_label(current_speaker)
+            paragraphs.append(f"{timestamp} {formatted_speaker}: {paragraph_text}")
+        else:
+            paragraphs.append(f"{timestamp}\n{paragraph_text}")
+
+    return "\n".join(paragraphs)

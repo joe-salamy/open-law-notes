@@ -3,6 +3,7 @@ FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /models
@@ -12,13 +13,16 @@ RUN pip install --upgrade pip setuptools wheel
 # Pin NumPy <2.0 for torch 2.1.0 compatibility
 RUN pip install --no-cache-dir "numpy<2"
 
-# Use CUDA 12.1 index for GPU-enabled PyTorch
-RUN pip install --no-cache-dir torch==2.1.0 --index-url https://download.pytorch.org/whl/cu121
+# Install pyannote.audio FIRST (it will pull CPU torch)
+RUN pip install --no-cache-dir pyannote.audio==3.1.1
 
 # Pin ctranslate2 for CUDA 12.1/cuDNN8 compatibility
 RUN pip install --no-cache-dir ctranslate2==4.4.0 faster-whisper==1.0.3
 
-# Add requests (missing dependency for faster-whisper model download)
+# REINSTALL torch+torchaudio with CUDA *after* pyannote (overwrites CPU versions)
+RUN pip install --no-cache-dir torch==2.1.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu121
+
+# Add other dependencies
 RUN pip install --no-cache-dir \
     fastapi==0.104.1 \
     uvicorn[standard]==0.24.0 \
