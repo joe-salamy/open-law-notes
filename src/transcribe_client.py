@@ -1,5 +1,6 @@
 """Cloud GPU transcription client for Salad API."""
 
+import json
 import requests
 from pathlib import Path
 from typing import Tuple, List, Any
@@ -70,14 +71,43 @@ class TranscribeClient:
                         files=files,
                         data=data,
                         timeout=1800,
+                        stream=True,  # Enable streaming response
                     )
 
                 # Handle response
                 if response.status_code == 200:
-                    result = response.json()
-                    segments = [TranscribeSegment(seg) for seg in result["segments"]]
-                    info = result.get("info", {})
-                    speaker_segments = result.get("speaker_segments")
+                    # Read streaming response line by line (newline-delimited JSON)
+                    result_data = None
+                    for line in response.iter_lines(decode_unicode=True):
+                        if not line:
+                            continue
+
+                        try:
+                            message = json.loads(line)
+                            msg_type = message.get("type")
+
+                            if msg_type == "progress":
+                                # Log progress updates
+                                logger.debug(f"[Cloud GPU] {message.get('message')}")
+
+                            elif msg_type == "result":
+                                # Final result received
+                                result_data = message.get("data")
+
+                            elif msg_type == "error":
+                                raise Exception(f"Server error: {message.get('message')}")
+
+                        except json.JSONDecodeError as e:
+                            logger.warning(f"Failed to parse streaming response: {line}")
+
+                    if result_data is None:
+                        raise Exception("No result received from streaming response")
+
+                    # Parse result
+                    segments = [TranscribeSegment(seg) for seg in result_data["segments"]]
+                    info = result_data.get("info", {})
+                    speaker_segments = result_data.get("speaker_segments")
+
                     logger.info(
                         f"✓ Cloud transcription complete: {len(segments)} segments"
                     )

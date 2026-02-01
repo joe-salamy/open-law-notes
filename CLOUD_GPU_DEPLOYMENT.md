@@ -548,6 +548,175 @@ If your instance gets interrupted (interruptible instances):
 - Destroy instances when done (unlike Salad, Vast doesn't auto-scale to 0)
 - Use interruptible instances for non-urgent batch processing
 
+### Creating a Reusable Vast.ai Template (Optional)
+
+If you plan to use vast.ai regularly, creating a template saves time by pre-configuring your Docker image, environment variables, and settings. You can then launch instances with one click.
+
+**When to Create a Template:**
+
+- You've deployed manually once and everything works
+- You want to quickly restart instances without reconfiguring
+- You plan to use vast.ai for multiple projects with similar setups
+
+**Step-by-Step: Create Template**
+
+1. **Go to Vast.ai Templates Page**
+
+   Navigate to: https://console.vast.ai/templates/
+
+2. **Click "Create Template"**
+
+3. **Fill in Template Fields:**
+
+   **Identification Section:**
+   - **Template Name**: `faster-whisper-transcription`
+     - Short, descriptive name for your template
+
+   - **Template Description**: `GPU-accelerated transcription API with faster-whisper large-v3 and speaker diarization`
+     - Brief description of what this template does
+
+   **Docker Repository And Environment:**
+   - **Image Path:Tag**: `yourusername/faster-whisper-api:latest`
+     - Replace `yourusername` with your Docker Hub username
+     - This is the same image you built and pushed in Step 1
+     - Format: `username/image:tag` or `registry.com/username/image:tag`
+
+   - **Version Tag**: Leave blank (uses `:latest` from Image Path)
+     - Only fill this if you want to override the tag specified in Image Path
+
+   **Docker Options:**
+   - **Docker create/run options**: Leave blank
+     - Advanced users can add flags like `-e TZ=UTC -h hostname`
+     - Not needed for our use case
+
+   - **Ports**: Leave blank (we'll configure this below)
+     - Port mapping is configured separately in the "Launch Mode" section
+
+   **Environment Variables:**
+
+   Click "+ Add Environment Variable" for each of these:
+
+   | Key                    | Value                         | Notes                                             |
+   | ---------------------- | ----------------------------- | ------------------------------------------------- |
+   | `MODEL_NAME`           | `large-v3`                    | Whisper model version                             |
+   | `COMPUTE_TYPE`         | `float16`                     | GPU precision (float16 for RTX 3090)              |
+   | `CUDA_VISIBLE_DEVICES` | `0`                           | Use first GPU                                     |
+   | `SALAD_API_KEY`        | `your-api-key-here`           | Replace with your generated API key (from Step 3) |
+   | `HF_TOKEN`             | `your-huggingface-token-here` | Only needed if using speaker diarization          |
+
+   **IMPORTANT**: Replace the placeholder values with your actual keys before saving the template.
+
+   **Select Launch Mode:**
+   - Select: **"Interactive shell server, SSH"**
+     - This launches the Docker container with our API server
+     - Our Dockerfile's `CMD` automatically starts the FastAPI server
+
+   - Do NOT select "Jupyter-python notebook + SSH" (we're not using Jupyter)
+   - Do NOT select "Docker ENTRYPOINT" (we use CMD in Dockerfile)
+
+   **Args to pass to docker ENTRYPOINT:**
+   - Leave blank
+     - Our Docker image handles startup automatically via `CMD`
+
+   **On-start Script:**
+   - Leave blank
+     - No additional bash commands needed
+     - The Docker container starts the API server automatically
+
+   **Extra Filters (CLI Format):**
+
+   Optional filters to auto-select instances. Example:
+
+   ```
+   verified=true gpu_name=RTX_3090 num_gpus=1 disk_space>=20
+   ```
+
+   This restricts instances to:
+   - `verified=true`: Only verified hosts (more reliable)
+   - `gpu_name=RTX_3090`: Only RTX 3090 GPUs
+   - `num_gpus=1`: Exactly 1 GPU
+   - `disk_space>=20`: At least 20 GB disk
+
+   **Recommended**: `verified=true num_gpus=1 disk_space>=20`
+
+   **Docker Repository Authentication:**
+
+   Only fill this if you're using a private Docker registry (Docker Hub private repo, GitHub Container Registry with authentication, etc.).
+
+   **For public Docker Hub images, leave this section blank.**
+
+   If using private registry:
+   - **Server**: `docker.io` (for Docker Hub) or `ghcr.io` (for GitHub Container Registry)
+   - **Docker Username**: Your Docker Hub or registry username
+   - **Docker Access Token**: Docker Hub access token or registry token (NOT your password)
+
+   **Disk Space (Container + Volume):**
+   - **Container disk size**: `20` GB
+     - Minimum: 20 GB (model + dependencies + workspace)
+     - Recommended: 30-40 GB if you want more buffer
+
+   - **Add recommended volume settings**: Leave unchecked
+     - Not needed for our use case (no persistent data)
+
+4. **Click "Save Template"**
+
+   Your template is now saved and ready to use.
+
+**Using Your Template to Launch Instances:**
+
+1. Go to https://console.vast.ai/
+2. Click "Search" to browse available instances
+3. Apply filters (RTX 3090, North America, etc.)
+4. Click "Rent" on a suitable instance
+5. In the configuration screen:
+   - Click the "Template" dropdown at the top
+   - Select your template: `faster-whisper-transcription`
+   - All fields auto-populate from your template
+6. **Add port mapping** (templates don't save this):
+   - In the "Expose TCP Port" section, add: `8000:8000`
+7. Click "Rent" to launch
+
+**Note**: Port mappings are NOT saved in templates (vast.ai limitation). You must add the port mapping (`8000:8000`) each time you launch an instance.
+
+**Updating Your Template:**
+
+If you update your Docker image or environment variables:
+
+1. Go to https://console.vast.ai/templates/
+2. Click "Edit" on your template
+3. Update the fields (e.g., new `HF_TOKEN`, different image tag)
+4. Click "Save Template"
+
+All future instances will use the updated configuration.
+
+**CLI Alternative (Advanced):**
+
+You can also create templates via the vast.ai CLI:
+
+```bash
+# Install vast CLI
+pip install vastai
+
+# Create template from JSON
+vastai create template \
+  --name "faster-whisper-transcription" \
+  --image "yourusername/faster-whisper-api:latest" \
+  --env MODEL_NAME=large-v3 \
+  --env COMPUTE_TYPE=float16 \
+  --env CUDA_VISIBLE_DEVICES=0 \
+  --env SALAD_API_KEY=your-api-key-here \
+  --env HF_TOKEN=your-token-here \
+  --disk 20
+
+# Launch instance from template
+vastai search offers 'reliability>0.95 num_gpus=1 gpu_name=RTX_3090' \
+  --order 'dph_total+' \
+  | head -n 1 \
+  | vastai create instance --template faster-whisper-transcription
+```
+
+See vast.ai CLI docs: https://vast.ai/docs/cli/commands
+
 ### Switching Between Providers
 
 Your code works with both Salad and Vast.ai. Just update the `.env` file:

@@ -4,10 +4,15 @@
 
 import os
 import tempfile
+import json
+import time
+import asyncio
 from pathlib import Path
 from typing import List, Dict, Any
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Header
+from fastapi.responses import StreamingResponse
 from faster_whisper import WhisperModel
 import uvicorn
 
@@ -96,9 +101,10 @@ async def transcribe_audio(
     min_speakers: int = Form(None),
     max_speakers: int = Form(None),
     authorization: str = Header(None),
-) -> Dict[str, Any]:
+):
     """
     Transcribe uploaded WAV file using faster-whisper on GPU.
+    Streams progress updates to keep connection alive during long transcriptions.
 
     Args:
         file: WAV audio file
@@ -111,7 +117,9 @@ async def transcribe_audio(
         authorization: Bearer token for authentication
 
     Returns:
-        JSON with segments, speaker_segments (if diarization enabled), and info
+        Streaming response with newline-delimited JSON:
+        - Progress updates: {"type": "progress", "message": "..."}
+        - Final result: {"type": "result", "data": {...}}
     """
     # Verify API key
     verify_api_key(authorization)
@@ -119,67 +127,110 @@ async def transcribe_audio(
     if MODEL is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
-    # Save uploaded file to temp location
-    temp_file = None
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-            content = await file.read()
-            tmp.write(content)
-            temp_file = tmp.name
+    async def generate_stream():
+        temp_file = None
+        try:
+            # Save uploaded file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+                content = await file.read()
+                tmp.write(content)
+                temp_file = tmp.name
 
-        # Transcribe with faster-whisper
-        segments, info = MODEL.transcribe(
-            temp_file,
-            beam_size=beam_size,
-            language=language,
-            word_timestamps=word_timestamps,
-        )
+            yield json.dumps({"type": "progress", "message": "File uploaded, starting transcription..."}) + "\n"
 
-        # Convert segments to JSON-serializable format
-        segments_list = [
-            {"id": seg.id, "start": seg.start, "end": seg.end, "text": seg.text}
-            for seg in segments
-        ]
+            # Run transcription in background thread (GPU operations block event loop)
+            executor = ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(_do_transcription, temp_file, beam_size, language, word_timestamps)
 
-        # Convert info to dict
-        info_dict = {
-            "language": info.language,
-            "language_probability": info.language_probability,
-            "duration": info.duration,
-        }
+            # Send heartbeat every 30 seconds while transcription runs
+            start_time = time.time()
+            while not future.done():
+                await asyncio.sleep(30)
+                elapsed = int(time.time() - start_time)
+                yield json.dumps({"type": "progress", "message": f"Transcribing... ({elapsed}s elapsed)"}) + "\n"
 
-        # Run diarization if enabled
-        speaker_segments = None
-        if enable_diarization and DIARIZATION_PIPELINE:
-            try:
-                diarization_kwargs = {}
-                if min_speakers is not None:
-                    diarization_kwargs["min_speakers"] = min_speakers
-                if max_speakers is not None:
-                    diarization_kwargs["max_speakers"] = max_speakers
+            # Get transcription result
+            segments_list, info_dict = future.result()
 
-                diarization = DIARIZATION_PIPELINE(temp_file, **diarization_kwargs)
-                speaker_segments = [
-                    {"start": turn.start, "end": turn.end, "speaker": speaker}
-                    for turn, _, speaker in diarization.itertracks(yield_label=True)
-                ]
-            except Exception as e:
-                print(f"Warning: Diarization failed: {e}")
-                speaker_segments = None
+            # Run diarization if enabled
+            speaker_segments = None
+            if enable_diarization and DIARIZATION_PIPELINE:
+                try:
+                    yield json.dumps({"type": "progress", "message": "Running speaker diarization..."}) + "\n"
 
-        return {
-            "segments": segments_list,
-            "speaker_segments": speaker_segments,
-            "info": info_dict,
-        }
+                    diarization_kwargs = {}
+                    if min_speakers is not None:
+                        diarization_kwargs["min_speakers"] = min_speakers
+                    if max_speakers is not None:
+                        diarization_kwargs["max_speakers"] = max_speakers
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+                    # Run diarization in background thread
+                    future_diarize = executor.submit(_do_diarization, temp_file, diarization_kwargs)
 
-    finally:
-        # Clean up temp file
-        if temp_file and os.path.exists(temp_file):
-            os.unlink(temp_file)
+                    # Send heartbeat during diarization
+                    while not future_diarize.done():
+                        await asyncio.sleep(30)
+                        yield json.dumps({"type": "progress", "message": "Diarization in progress..."}) + "\n"
+
+                    speaker_segments = future_diarize.result()
+                except Exception as e:
+                    print(f"Warning: Diarization failed: {e}")
+                    speaker_segments = None
+
+            # Send final result
+            result = {
+                "segments": segments_list,
+                "speaker_segments": speaker_segments,
+                "info": info_dict,
+            }
+            yield json.dumps({"type": "result", "data": result}) + "\n"
+
+            executor.shutdown(wait=True)
+
+        except Exception as e:
+            yield json.dumps({"type": "error", "message": str(e)}) + "\n"
+
+        finally:
+            # Clean up temp file
+            if temp_file and os.path.exists(temp_file):
+                os.unlink(temp_file)
+
+    return StreamingResponse(generate_stream(), media_type="application/x-ndjson")
+
+
+def _do_transcription(temp_file: str, beam_size: int, language: str, word_timestamps: bool):
+    """Run transcription in background thread (blocking GPU operation)."""
+    segments, info = MODEL.transcribe(
+        temp_file,
+        beam_size=beam_size,
+        language=language,
+        word_timestamps=word_timestamps,
+    )
+
+    # Convert segments to JSON-serializable format
+    segments_list = [
+        {"id": seg.id, "start": seg.start, "end": seg.end, "text": seg.text}
+        for seg in segments
+    ]
+
+    # Convert info to dict
+    info_dict = {
+        "language": info.language,
+        "language_probability": info.language_probability,
+        "duration": info.duration,
+    }
+
+    return segments_list, info_dict
+
+
+def _do_diarization(temp_file: str, diarization_kwargs: dict):
+    """Run diarization in background thread (blocking GPU operation)."""
+    diarization = DIARIZATION_PIPELINE(temp_file, **diarization_kwargs)
+    speaker_segments = [
+        {"start": turn.start, "end": turn.end, "speaker": speaker}
+        for turn, _, speaker in diarization.itertracks(yield_label=True)
+    ]
+    return speaker_segments
 
 
 if __name__ == "__main__":
