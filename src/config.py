@@ -32,20 +32,20 @@ WHISPER_MODEL = "tiny"
 
 # ========== CLOUD GPU SETTINGS ==========
 
-# Toggle between cloud GPU (Salad) and local CPU
+# Toggle between cloud GPU (Vast.ai) and local CPU
 USE_CLOUD_GPU = True  # Set to False to use local CPU
 
-# Salad API configuration (only used if USE_CLOUD_GPU = True)
+# Vast.ai API configuration (only used if USE_CLOUD_GPU = True)
 CLOUD_API_URL = os.getenv(
-    "SALAD_API_URL", "https://your-deployment.salad.cloud/transcribe"
+    "VAST_API_URL", "http://your-vast-instance:port/transcribe"
 )
-CLOUD_API_KEY = os.getenv("SALAD_API_KEY")  # Required for authentication
+CLOUD_API_KEY = os.getenv("VAST_API_KEY")  # Required for authentication
 
 # Validate cloud GPU configuration
 if USE_CLOUD_GPU:
     if not CLOUD_API_KEY:
         raise ValueError(
-            "SALAD_API_KEY environment variable is required when USE_CLOUD_GPU=True. "
+            "VAST_API_KEY environment variable is required when USE_CLOUD_GPU=True. "
             "Please set it in your .env file."
         )
 

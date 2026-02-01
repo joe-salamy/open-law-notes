@@ -167,6 +167,18 @@ def transcribe_single_file(
         sf.write(str(wav_file_path), audio_data, sample_rate)
         logger.debug(f"Saved preprocessed audio to {wav_filename}")
 
+        # For cloud GPU: compress to FLAC to reduce upload time
+        upload_file_path = wav_file_path
+        if config.USE_CLOUD_GPU:
+            flac_filename = wav_file_path.stem + ".flac"
+            flac_file_path = wav_file_path.parent / flac_filename
+            logger.debug(f"Compressing to FLAC for faster upload: {flac_filename}")
+            sf.write(str(flac_file_path), audio_data, sample_rate, format='FLAC')
+            original_size_mb = wav_file_path.stat().st_size / 1_000_000
+            compressed_size_mb = flac_file_path.stat().st_size / 1_000_000
+            logger.debug(f"Compressed {original_size_mb:.1f}MB -> {compressed_size_mb:.1f}MB ({compressed_size_mb/original_size_mb*100:.0f}% of original)")
+            upload_file_path = flac_file_path
+
         # Step 2: Transcribe with timestamps
         if config.USE_CLOUD_GPU:
             # Cloud GPU: network overhead + GPU processing (~10x real-time)
@@ -187,7 +199,7 @@ def transcribe_single_file(
 
             client = TranscribeClient(config.CLOUD_API_URL, config.CLOUD_API_KEY)
             segments_raw, info, speaker_segments = client.transcribe(
-                wav_file_path,
+                upload_file_path,
                 beam_size=5,
                 language="en",
                 word_timestamps=False,
@@ -290,6 +302,15 @@ def transcribe_single_file(
         logger.info(f"[SAVE COMPLETE] {txt_filename}")
         logger.info(f"[WORKER COMPLETE] ✓ Successfully transcribed: {audio_file.name}")
         logger.info(f"Preprocessed WAV saved as: {wav_filename}")
+
+        # Cleanup FLAC file if we created one for cloud upload
+        if config.USE_CLOUD_GPU and upload_file_path != wav_file_path:
+            try:
+                upload_file_path.unlink()
+                logger.debug(f"Cleaned up temporary FLAC file: {upload_file_path.name}")
+            except Exception as e:
+                logger.warning(f"Failed to cleanup FLAC file: {e}")
+
         return (
             True,
             "Successfully transcribed",

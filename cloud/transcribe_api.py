@@ -23,10 +23,10 @@ MODEL = None
 DIARIZATION_PIPELINE = None
 
 # API Key for authentication (set via environment variable)
-API_KEY = os.getenv("SALAD_API_KEY")
+API_KEY = os.getenv("VAST_API_KEY")
 
 if not API_KEY:
-    raise ValueError("SALAD_API_KEY environment variable must be set")
+    raise ValueError("VAST_API_KEY environment variable must be set")
 
 
 def verify_api_key(authorization: str = Header(None)) -> None:
@@ -103,11 +103,11 @@ async def transcribe_audio(
     authorization: str = Header(None),
 ):
     """
-    Transcribe uploaded WAV file using faster-whisper on GPU.
+    Transcribe uploaded audio file using faster-whisper on GPU.
     Streams progress updates to keep connection alive during long transcriptions.
 
     Args:
-        file: WAV audio file
+        file: Audio file (WAV or FLAC)
         beam_size: Beam size for transcription (default: 5)
         language: Language code (default: en)
         word_timestamps: Include word-level timestamps (default: False)
@@ -130,8 +130,9 @@ async def transcribe_audio(
     async def generate_stream():
         temp_file = None
         try:
-            # Save uploaded file
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+            # Save uploaded file (determine extension from filename)
+            file_ext = Path(file.filename).suffix or ".wav"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
                 content = await file.read()
                 tmp.write(content)
                 temp_file = tmp.name

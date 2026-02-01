@@ -1,4 +1,4 @@
-"""Cloud GPU transcription client for Salad API."""
+"""Cloud GPU transcription client for Vast.ai API."""
 
 import json
 import requests
@@ -51,9 +51,10 @@ class TranscribeClient:
 
         for attempt in range(self.max_retries):
             try:
-                # Prepare request
+                # Prepare request (detect MIME type from file extension)
+                mime_type = "audio/flac" if wav_file_path.suffix == ".flac" else "audio/wav"
                 with open(wav_file_path, "rb") as f:
-                    files = {"file": (wav_file_path.name, f, "audio/wav")}
+                    files = {"file": (wav_file_path.name, f, mime_type)}
                     data = {
                         "beam_size": beam_size,
                         "language": language,
