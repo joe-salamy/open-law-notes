@@ -37,4 +37,6 @@ ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
 RUN python3 -c "from faster_whisper import WhisperModel; WhisperModel('large-v3', device='cpu', compute_type='int8', download_root='/models')"
 
 EXPOSE 8000
-CMD ["python3", "-m", "uvicorn", "transcribe_api:app", "--host", "0.0.0.0", "--port", "8000"]
+# Below is the original command without timeout adjustment
+# CMD ["python3", "-m", "uvicorn", "transcribe_api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python3", "-m", "uvicorn", "transcribe_api:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "3600"]

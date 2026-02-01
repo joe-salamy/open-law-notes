@@ -10,7 +10,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Tuple
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 
 import soundfile as sf
@@ -23,7 +23,6 @@ from file_mover import move_audio_to_processed
 from logger_config import get_logger
 from audio_helper import (
     preprocess_audio,
-    format_transcription_paragraphs,
     assign_speakers_to_segments,
     format_transcription_with_speakers,
 )
@@ -83,6 +82,14 @@ def _worker_init(
             file_handler.setFormatter(file_formatter)
             worker_logger.addHandler(file_handler)
 
+    # Skip model loading if using cloud GPU
+    if config.USE_CLOUD_GPU:
+        worker_logger.info(
+            f"Worker initialized (cloud GPU mode - skipping local model load)"
+        )
+        _WORKER_MODEL = None
+        return
+
     try:
         # Set HuggingFace token for authenticated downloads
         hf_token = os.getenv("HF_TOKEN")
@@ -126,9 +133,9 @@ def transcribe_single_file(
 
     try:
         logger.info(f"[WORKER START] Processing: {audio_file.name}")
-        # Use the worker-global model
+        # Use the worker-global model (only checked if using local CPU)
         global _WORKER_MODEL
-        if _WORKER_MODEL is None:
+        if not config.USE_CLOUD_GPU and _WORKER_MODEL is None:
             logger.error(f"[ERROR] Model not loaded in worker for {audio_file.name}")
             return (
                 False,
@@ -139,7 +146,8 @@ def transcribe_single_file(
                 class_name,
             )
 
-        logger.debug(f"[MODEL CHECK] Worker model ready for {audio_file.name}")
+        if not config.USE_CLOUD_GPU:
+            logger.debug(f"[MODEL CHECK] Worker model ready for {audio_file.name}")
 
         # Step 1: Preprocess audio
         logger.info(f"[PREPROCESSING START] {audio_file.name}")
@@ -247,7 +255,9 @@ def transcribe_single_file(
         if speaker_segments:
             logger.info(f"[SPEAKER ASSIGNMENT START] Assigning speakers to segments")
             segments_list = assign_speakers_to_segments(segments_list, speaker_segments)
-            logger.info(f"[SPEAKER ASSIGNMENT COMPLETE] Speakers assigned to {total_segments} segments")
+            logger.info(
+                f"[SPEAKER ASSIGNMENT COMPLETE] Speakers assigned to {total_segments} segments"
+            )
 
         # Step 4: Format transcription with paragraph-based timestamps (token-efficient)
         transcription = format_transcription_with_speakers(
@@ -340,9 +350,12 @@ def process_class_lectures(
     successful = 0
     failed = 0
 
-    logger.debug(
-        f"Starting parallel transcription with {config.MAX_AUDIO_WORKERS} workers"
+    max_workers = (
+        config.MAX_AUDIO_WORKERS_CLOUD_GPU
+        if config.USE_CLOUD_GPU
+        else config.MAX_AUDIO_WORKERS_LOCAL_CPU
     )
+    logger.debug(f"Starting parallel transcription with {max_workers} workers")
 
     # Get log file path from the main logger to pass to workers
     log_file_path = None
@@ -360,11 +373,19 @@ def process_class_lectures(
         logger.info(f"Monitor with: Get-Content '{log_file_path}' -Wait -Tail 50")
 
     # Process files in parallel with progress bar
-    with ProcessPoolExecutor(
-        max_workers=config.MAX_AUDIO_WORKERS,
-        initializer=_worker_init,
-        initargs=(model_name, device, compute_type, cpu_threads, log_file_path),
-    ) as executor:
+    # Use ThreadPoolExecutor for cloud GPU (I/O-bound), ProcessPoolExecutor for local CPU (CPU-bound)
+    if config.USE_CLOUD_GPU:
+        executor_class = ThreadPoolExecutor
+        executor_kwargs = {"max_workers": config.MAX_AUDIO_WORKERS_CLOUD_GPU}
+    else:
+        executor_class = ProcessPoolExecutor
+        executor_kwargs = {
+            "max_workers": config.MAX_AUDIO_WORKERS_LOCAL_CPU,
+            "initializer": _worker_init,
+            "initargs": (model_name, device, compute_type, cpu_threads, log_file_path),
+        }
+
+    with executor_class(**executor_kwargs) as executor:
         futures = {
             executor.submit(transcribe_single_file, args): args[0] for args in task_args
         }
@@ -447,16 +468,29 @@ def process_all_lectures(classes: List[Path]) -> None:
     Args:
         classes: List of class folder paths
     """
-    # CPU-optimized configuration (per instructions)
-    device = "cpu"
-    compute_type = "int8"  # Faster CPU inference with minimal accuracy loss
-    cpu_threads = 4  # Safe limit to avoid overheating/crashing
-    model_name = "large-v3"  # Most accurate Whisper model
+    # Configuration for transcription
+    if config.USE_CLOUD_GPU:
+        logger.info(f"Using cloud GPU transcription")
+        logger.info(f"Cloud API: {config.CLOUD_API_URL}")
+        logger.info(f"Concurrent uploads: {config.MAX_AUDIO_WORKERS_CLOUD_GPU}")
+        logger.info(f"Speaker diarization: {config.ENABLE_DIARIZATION}")
+        # These parameters are only used for local fallback if cloud fails
+        device = "cpu"
+        compute_type = "int8"
+        cpu_threads = 4
+        model_name = "large-v3"
+    else:
+        # CPU-optimized configuration (per instructions)
+        device = "cpu"
+        compute_type = "int8"  # Faster CPU inference with minimal accuracy loss
+        cpu_threads = 4  # Safe limit to avoid overheating/crashing
+        model_name = "large-v3"  # Most accurate Whisper model
+        logger.info(f"Using local CPU transcription")
+        logger.info(f"Model: {model_name}")
+        logger.info(f"Device: {device} (compute_type: {compute_type})")
+        logger.info(f"CPU threads: {cpu_threads}")
+        logger.info(f"Parallel workers: {config.MAX_AUDIO_WORKERS_LOCAL_CPU}")
 
-    logger.info(f"Using faster-whisper model: {model_name}")
-    logger.info(f"Device: {device} (compute_type: {compute_type})")
-    logger.info(f"CPU threads: {cpu_threads}")
-    logger.info(f"Parallel workers: {config.MAX_AUDIO_WORKERS}")
     logger.debug(f"Processing {len(classes)} classes for audio transcription")
 
     # Collect all audio files from all classes
@@ -512,11 +546,19 @@ def process_all_lectures(classes: List[Path]) -> None:
     total_failed = 0
 
     # Process ALL files from ALL classes in a single pool
-    with ProcessPoolExecutor(
-        max_workers=config.MAX_AUDIO_WORKERS,
-        initializer=_worker_init,
-        initargs=(model_name, device, compute_type, cpu_threads, log_file_path),
-    ) as executor:
+    # Use ThreadPoolExecutor for cloud GPU (I/O-bound), ProcessPoolExecutor for local CPU (CPU-bound)
+    if config.USE_CLOUD_GPU:
+        executor_class = ThreadPoolExecutor
+        executor_kwargs = {"max_workers": config.MAX_AUDIO_WORKERS_CLOUD_GPU}
+    else:
+        executor_class = ProcessPoolExecutor
+        executor_kwargs = {
+            "max_workers": config.MAX_AUDIO_WORKERS_LOCAL_CPU,
+            "initializer": _worker_init,
+            "initargs": (model_name, device, compute_type, cpu_threads, log_file_path),
+        }
+
+    with executor_class(**executor_kwargs) as executor:
         futures = {
             executor.submit(transcribe_single_file, args): args
             for args in all_task_args

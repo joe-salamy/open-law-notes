@@ -28,6 +28,9 @@ class TranscribeClient:
         self.api_url = api_url
         self.api_key = api_key
         self.max_retries = max_retries
+        # Reuse HTTP session for connection pooling (faster subsequent requests)
+        self.session = requests.Session()
+        self.session.headers.update({"Authorization": f"Bearer {self.api_key}"})
 
     def transcribe(
         self,
@@ -61,14 +64,11 @@ class TranscribeClient:
                     if max_speakers is not None:
                         data["max_speakers"] = max_speakers
 
-                    headers = {"Authorization": f"Bearer {self.api_key}"}
-
                     # Upload and transcribe (30 min timeout for long files)
-                    response = requests.post(
+                    response = self.session.post(
                         self.api_url,
                         files=files,
                         data=data,
-                        headers=headers,
                         timeout=1800,
                     )
 
@@ -114,3 +114,7 @@ class TranscribeClient:
                     raise
 
         raise Exception("Max retries exceeded")
+
+    def close(self):
+        """Close the HTTP session to free resources."""
+        self.session.close()
