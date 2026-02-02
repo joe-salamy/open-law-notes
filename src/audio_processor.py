@@ -173,10 +173,12 @@ def transcribe_single_file(
             flac_filename = wav_file_path.stem + ".flac"
             flac_file_path = wav_file_path.parent / flac_filename
             logger.debug(f"Compressing to FLAC for faster upload: {flac_filename}")
-            sf.write(str(flac_file_path), audio_data, sample_rate, format='FLAC')
+            sf.write(str(flac_file_path), audio_data, sample_rate, format="FLAC")
             original_size_mb = wav_file_path.stat().st_size / 1_000_000
             compressed_size_mb = flac_file_path.stat().st_size / 1_000_000
-            logger.debug(f"Compressed {original_size_mb:.1f}MB -> {compressed_size_mb:.1f}MB ({compressed_size_mb/original_size_mb*100:.0f}% of original)")
+            logger.debug(
+                f"Compressed {original_size_mb:.1f}MB -> {compressed_size_mb:.1f}MB ({compressed_size_mb/original_size_mb*100:.0f}% of original)"
+            )
             upload_file_path = flac_file_path
 
         # Step 2: Transcribe with timestamps
@@ -229,8 +231,8 @@ def transcribe_single_file(
             segment_count += 1
             last_segment_end = segment.end  # Update audio time processed
 
-            # Log progress every 25 segments
-            if segment_count % 25 == 0:
+            # Log progress every 25 segments (only for local CPU mode)
+            if not config.USE_CLOUD_GPU and segment_count % 25 == 0:
                 elapsed_time = time.time() - start_time
                 percent_complete = (last_segment_end / total_duration_seconds) * 100
 

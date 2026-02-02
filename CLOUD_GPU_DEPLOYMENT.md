@@ -14,10 +14,6 @@
 8. Run code, check GPU utilization
 9. Delete instance when done (incurs costs when not in use, so fast to set up that not worth to leave on)
 
-# If I make a new docker image:
-
-- Change .env var names to vast.ai (I could now in all except the cloud.py)
-
 # Cloud GPU Deployment Guide
 
 This guide covers deploying the faster-whisper transcription service to **vast.ai** using Docker ENTRYPOINT launch mode.
@@ -48,6 +44,8 @@ docker tag faster-whisper-api:latest yourusername/faster-whisper-api:latest
 docker login
 docker push yourusername/faster-whisper-api:latest
 ```
+
+Note to self: vast.ai is retarded and latest tag doesn't actuall pull latest. Tag with versions to force latest.
 
 ### Step 2: Generate API Keys
 
@@ -86,6 +84,8 @@ Get HuggingFace token (for speaker diarization):
 - Image Path:Tag: `yourusername/faster-whisper-api:latest`
 - Version Tag: Leave blank
 
+Note: replace with yourusername/faster-whisper-api:v2 (or whatever current version #)
+
 **Docker Options:**
 
 - Docker create/run options: Leave blank
@@ -100,6 +100,8 @@ CUDA_VISIBLE_DEVICES=0
 VAST_API_KEY=your-api-key-from-step-2
 HF_TOKEN=your-huggingface-token-here
 ```
+
+(Claude Code later recommended deleting CUDA_VISIBLE_DEVICES based on vast console logs)
 
 **Select Launch Mode:** `Docker ENTRYPOINT` (third option)
 

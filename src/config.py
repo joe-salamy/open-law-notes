@@ -36,9 +36,7 @@ WHISPER_MODEL = "tiny"
 USE_CLOUD_GPU = True  # Set to False to use local CPU
 
 # Vast.ai API configuration (only used if USE_CLOUD_GPU = True)
-CLOUD_API_URL = os.getenv(
-    "VAST_API_URL", "http://your-vast-instance:port/transcribe"
-)
+CLOUD_API_URL = os.getenv("VAST_API_URL", "http://your-vast-instance:port/transcribe")
 CLOUD_API_KEY = os.getenv("VAST_API_KEY")  # Required for authentication
 
 # Validate cloud GPU configuration

@@ -137,18 +137,30 @@ async def transcribe_audio(
                 tmp.write(content)
                 temp_file = tmp.name
 
-            yield json.dumps({"type": "progress", "message": "File uploaded, starting transcription..."}) + "\n"
+            yield json.dumps(
+                {
+                    "type": "progress",
+                    "message": "File uploaded, starting transcription...",
+                }
+            ) + "\n"
 
             # Run transcription in background thread (GPU operations block event loop)
             executor = ThreadPoolExecutor(max_workers=1)
-            future = executor.submit(_do_transcription, temp_file, beam_size, language, word_timestamps)
+            future = executor.submit(
+                _do_transcription, temp_file, beam_size, language, word_timestamps
+            )
 
             # Send heartbeat every 30 seconds while transcription runs
             start_time = time.time()
             while not future.done():
                 await asyncio.sleep(30)
                 elapsed = int(time.time() - start_time)
-                yield json.dumps({"type": "progress", "message": f"Transcribing... ({elapsed}s elapsed)"}) + "\n"
+                yield json.dumps(
+                    {
+                        "type": "progress",
+                        "message": f"Transcribing... ({elapsed}s elapsed)",
+                    }
+                ) + "\n"
 
             # Get transcription result
             segments_list, info_dict = future.result()
@@ -157,7 +169,12 @@ async def transcribe_audio(
             speaker_segments = None
             if enable_diarization and DIARIZATION_PIPELINE:
                 try:
-                    yield json.dumps({"type": "progress", "message": "Running speaker diarization..."}) + "\n"
+                    yield json.dumps(
+                        {
+                            "type": "progress",
+                            "message": "Running speaker diarization...",
+                        }
+                    ) + "\n"
 
                     diarization_kwargs = {}
                     if min_speakers is not None:
@@ -166,12 +183,19 @@ async def transcribe_audio(
                         diarization_kwargs["max_speakers"] = max_speakers
 
                     # Run diarization in background thread
-                    future_diarize = executor.submit(_do_diarization, temp_file, diarization_kwargs)
+                    future_diarize = executor.submit(
+                        _do_diarization, temp_file, diarization_kwargs
+                    )
 
                     # Send heartbeat during diarization
                     while not future_diarize.done():
                         await asyncio.sleep(30)
-                        yield json.dumps({"type": "progress", "message": "Diarization in progress..."}) + "\n"
+                        yield json.dumps(
+                            {
+                                "type": "progress",
+                                "message": "Diarization in progress...",
+                            }
+                        ) + "\n"
 
                     speaker_segments = future_diarize.result()
                 except Exception as e:
@@ -199,7 +223,9 @@ async def transcribe_audio(
     return StreamingResponse(generate_stream(), media_type="application/x-ndjson")
 
 
-def _do_transcription(temp_file: str, beam_size: int, language: str, word_timestamps: bool):
+def _do_transcription(
+    temp_file: str, beam_size: int, language: str, word_timestamps: bool
+):
     """Run transcription in background thread (blocking GPU operation)."""
     segments, info = MODEL.transcribe(
         temp_file,
