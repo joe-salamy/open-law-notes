@@ -183,8 +183,8 @@ def transcribe_single_file(
 
         # Step 2: Transcribe with timestamps
         if config.USE_CLOUD_GPU:
-            # Cloud GPU: network overhead + GPU processing (~10x real-time)
-            network_overhead = 3  # minutes for upload
+            # Cloud GPU: network overhead + GPU processing (~5x real-time)
+            network_overhead = 5  # minutes for upload
             gpu_time = duration_minutes / 10
             estimated_minutes = network_overhead + gpu_time
             eta_msg = f"Will take ~{estimated_minutes:.1f} minutes (cloud GPU)"
