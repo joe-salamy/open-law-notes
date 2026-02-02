@@ -74,13 +74,24 @@ Get HuggingFace token (for speaker diarization):
 2. Filter: RTX 3090, 24GB+ VRAM, 20GB+ disk, verified hosts
 3. Click "Rent" on a suitable instance (~$0.20-0.30/hour)
 
-### Step 5: Configure Instance (Docker ENTRYPOINT Launch Mode)
+### Step 5: Configure Instance - Complete Form Guide
 
-**Image Path/Tag:** `yourusername/faster-whisper-api:latest`
+**Identification:**
 
-**Launch Mode:** Select **"Docker ENTRYPOINT"**
+- Template Name: Leave blank (or name it if saving as template)
+- Template Description: Leave blank
 
-**Environment Variables:**
+**Docker Repository And Environment:**
+
+- Image Path:Tag: `yourusername/faster-whisper-api:latest`
+- Version Tag: Leave blank
+
+**Docker Options:**
+
+- Docker create/run options: Leave blank
+- Ports: Leave blank
+
+**Environment Variables:** Click "+ Add Environment Variable" and batch paste:
 
 ```
 MODEL_NAME=large-v3
@@ -90,9 +101,24 @@ VAST_API_KEY=your-api-key-from-step-2
 HF_TOKEN=your-huggingface-token-here
 ```
 
-**Disk Space:** 20 GB minimum
+**Select Launch Mode:** `Docker ENTRYPOINT` (third option)
 
-**Expose TCP Port:** `8000:8000`
+**Args to pass to docker ENTRYPOINT:** Leave blank
+
+**On-start Script:** Leave blank
+
+**Extra Filters (CLI Format):** Leave blank (or optionally: `verified=true num_gpus=1`)
+
+**Docker Repository Authentication:** Leave all blank (for public Docker Hub images)
+
+- Server: blank
+- Docker Username: blank
+- Docker Access Token: blank
+
+**Disk Space (Container + Volume):**
+
+- Container disk size: `20` GB
+- Add recommended volume settings: Leave unchecked
 
 Click "Rent" to create the instance.
 
