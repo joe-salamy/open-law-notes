@@ -20,16 +20,6 @@ CLASSES = [
     Path("C:\\Users\\joesa\\OneDrive\\Documents\\Law school\\Quant Methods"),
 ]
 
-# ========== PROCESSING SETTINGS ==========
-
-# Toggle this to True to only process readings (skip audio processing and Google Drive operations)
-READING_ONLY_MODE = False
-
-# Whisper model size for transcription
-# Options: 'tiny', 'base', 'small', 'medium', 'large'
-# 'tiny' = fastest, 'large' = most accurate
-WHISPER_MODEL = "tiny"
-
 # ========== CLOUD GPU SETTINGS ==========
 
 # Toggle between cloud GPU (Vast.ai) and local CPU

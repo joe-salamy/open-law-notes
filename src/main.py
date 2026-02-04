@@ -4,8 +4,9 @@ Processes lecture audio and reading text files for multiple classes.
 """
 
 import sys
+import argparse
 from pathlib import Path
-from config import CLASSES, READING_ONLY_MODE
+from config import CLASSES
 from llm_processor import process_all_readings, process_all_lectures
 from folder_manager import verify_and_create_folders
 from file_mover import setup_output_directory
@@ -19,13 +20,25 @@ logger = get_logger(__name__)
 
 def main():
     """Main entry point for the law school note generator."""
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(
+        description="Law School Note Generator - Process lecture audio and reading files"
+    )
+    parser.add_argument(
+        "--read-only",
+        action="store_true",
+        help="Only process readings (skip audio processing and Google Drive operations)",
+    )
+    args = parser.parse_args()
+    reading_only_mode = args.read_only
+
     # Initialize logging first
     setup_logging()
 
     logger.info("=" * 70)
     logger.info("LAW SCHOOL NOTE GENERATOR")
     logger.info("=" * 70)
-    if READING_ONLY_MODE:
+    if reading_only_mode:
         logger.info("*** READING-ONLY MODE ENABLED ***")
     logger.debug(f"Processing {len(CLASSES)} classes")
 
@@ -40,7 +53,7 @@ def main():
         sys.exit(1)
 
     # Download files from Google Drive
-    if not READING_ONLY_MODE:
+    if not reading_only_mode:
         logger.info("=" * 70)
         logger.info("STEP 0: Downloading Files from Google Drive")
         logger.info("=" * 70)
@@ -81,7 +94,7 @@ def main():
             sys.exit(1)
 
     # Process lecture audio files to transcripts
-    if not READING_ONLY_MODE:
+    if not reading_only_mode:
         logger.info("=" * 70)
         logger.info("STEP 2: Converting Lecture Audio to Text")
         logger.info("=" * 70)
@@ -99,7 +112,7 @@ def main():
         logger.info("=" * 70)
 
     # Process lecture transcripts with LLM
-    if not READING_ONLY_MODE:
+    if not reading_only_mode:
         logger.info("=" * 70)
         logger.info("STEP 3: Generating Lecture Notes with LLM")
         logger.info("=" * 70)

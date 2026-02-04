@@ -16,7 +16,7 @@ Automated system for generating lecture and reading notes from audio files and t
 5. Configure class paths in `src/config.py`
 6. Create prompt files in `prompts/`
 7. Place M4A files in `lecture-input/` folders
-8. Run: `cd src && python main.py`
+8. Run: `python src/main.py` or `python src/main.py --read-only`
 
 ### Monitor Progress in Real-Time
 

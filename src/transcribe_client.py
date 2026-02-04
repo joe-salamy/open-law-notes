@@ -52,7 +52,9 @@ class TranscribeClient:
         for attempt in range(self.max_retries):
             try:
                 # Prepare request (detect MIME type from file extension)
-                mime_type = "audio/flac" if wav_file_path.suffix == ".flac" else "audio/wav"
+                mime_type = (
+                    "audio/flac" if wav_file_path.suffix == ".flac" else "audio/wav"
+                )
                 with open(wav_file_path, "rb") as f:
                     files = {"file": (wav_file_path.name, f, mime_type)}
                     data = {
@@ -96,16 +98,22 @@ class TranscribeClient:
                                 result_data = message.get("data")
 
                             elif msg_type == "error":
-                                raise Exception(f"Server error: {message.get('message')}")
+                                raise Exception(
+                                    f"Server error: {message.get('message')}"
+                                )
 
                         except json.JSONDecodeError as e:
-                            logger.warning(f"Failed to parse streaming response: {line}")
+                            logger.warning(
+                                f"Failed to parse streaming response: {line}"
+                            )
 
                     if result_data is None:
                         raise Exception("No result received from streaming response")
 
                     # Parse result
-                    segments = [TranscribeSegment(seg) for seg in result_data["segments"]]
+                    segments = [
+                        TranscribeSegment(seg) for seg in result_data["segments"]
+                    ]
                     info = result_data.get("info", {})
                     speaker_segments = result_data.get("speaker_segments")
 
