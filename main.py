@@ -6,13 +6,13 @@ Processes lecture audio and reading text files for multiple classes.
 import sys
 import argparse
 from pathlib import Path
-from config import CLASSES
-from llm_processor import process_all_readings, process_all_lectures
-from folder_manager import verify_and_create_folders
-from file_mover import setup_output_directory
-from audio_processor import process_all_lectures as process_audio
-from drive_downloader import download_from_drive
-from logger_config import setup_logging, get_logger
+from src.config import CLASSES
+from src.llm_processor import process_all_readings, process_all_lectures
+from src.folder_manager import verify_and_create_folders
+from src.file_mover import setup_output_directory
+from src.audio_processor import process_all_lectures as process_audio
+from src.drive_downloader import download_from_drive
+from src.logger_config import setup_logging, get_logger
 
 # Initialize logger
 logger = get_logger(__name__)

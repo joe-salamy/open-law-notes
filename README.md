@@ -16,7 +16,7 @@ Automated system for generating lecture and reading notes from audio files and t
 5. Configure class paths in `src/config.py`
 6. Create prompt files in `prompts/`
 7. Place M4A files in `lecture-input/` folders
-8. Run: `python src/main.py` or `python src/main.py --read-only`
+8. Run: `python main.py` or `python main.py --read-only`
 
 ### Monitor Progress in Real-Time
 
@@ -62,8 +62,8 @@ This shows the last 50 log lines and streams new entries as they're written. You
 
 ```
 .
+├── main.py                     # Central orchestrator (entry point)
 ├── src/
-│   ├── main.py                 # Central orchestrator
 │   ├── config.py               # Configuration settings
 │   ├── folder_manager.py       # Folder structure management
 │   ├── audio_processor.py      # Audio transcription with faster-whisper
@@ -236,7 +236,6 @@ CLASSES = [
 ### 10. Test Run
 
 ```bash
-cd src
 python main.py
 ```
 
@@ -259,7 +258,6 @@ python main.py
 ### Running the Pipeline
 
 ```bash
-cd src
 python main.py
 ```
 

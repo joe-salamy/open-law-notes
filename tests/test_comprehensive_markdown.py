@@ -1,12 +1,6 @@
 """Comprehensive test for bold and italic formatting in markdown parser."""
 
-import sys
-
-sys.path.insert(
-    0, "c:\\Users\\joesa\\OneDrive\\Documents\\law-school-python\\smart-law-notes\\src"
-)
-
-from markdown_parser import parse_inline_styles
+from src.markdown_parser import parse_inline_styles
 
 test_cases = [
     # (input, expected_plain_text, expected_formatting_description)

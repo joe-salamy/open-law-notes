@@ -6,7 +6,7 @@
    - RTX 3090
    - North America
    - Price (inc.)
-3. Pick whatever the first one is
+3. Pick whatever the first one is - that's NOT host:344939 at $0.116/hr
 4. Let it load
 5. Click the blue IP address
 6. Run curl http://[IP]:[PORT]/health (open ports listed at bottom)
@@ -149,7 +149,7 @@ HF_TOKEN=your-huggingface-token-here
 ### Step 8: Test Transcription
 
 ```bash
-python src/main.py
+python main.py
 ```
 
 ### Instance Management

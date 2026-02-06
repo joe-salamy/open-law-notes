@@ -17,11 +17,11 @@ import soundfile as sf
 from faster_whisper import WhisperModel
 from tqdm import tqdm
 
-import config
-from folder_manager import get_class_paths, get_audio_files
-from file_mover import move_audio_to_processed
-from logger_config import get_logger
-from audio_helper import (
+from . import config
+from .folder_manager import get_class_paths, get_audio_files
+from .file_mover import move_audio_to_processed
+from .logger_config import get_logger
+from .audio_helper import (
     preprocess_audio,
     assign_speakers_to_segments,
     format_transcription_with_speakers,

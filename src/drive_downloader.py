@@ -12,8 +12,8 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 import pickle
 
-from config import LECTURE_INPUT, LLM_BASE, DRIVE_PARENT_FOLDER_ID
-from logger_config import get_logger
+from .config import LECTURE_INPUT, LLM_BASE, DRIVE_PARENT_FOLDER_ID
+from .logger_config import get_logger
 
 logger = get_logger(__name__)
 

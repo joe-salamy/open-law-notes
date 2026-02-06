@@ -11,10 +11,10 @@ import time
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-import config
-from folder_manager import get_class_paths, get_text_files, get_pdf_files
-from file_mover import move_to_processed, copy_to_new_outputs
-from logger_config import get_logger
+from . import config
+from .folder_manager import get_class_paths, get_text_files, get_pdf_files
+from .file_mover import move_to_processed, copy_to_new_outputs
+from .logger_config import get_logger
 
 # Load environment variables
 load_dotenv()

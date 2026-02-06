@@ -1,12 +1,6 @@
 """Test processing the actual Bussel 10.21.2025.md file that had the issue."""
 
-import sys
-
-sys.path.insert(
-    0, "c:\\Users\\joesa\\OneDrive\\Documents\\law-school-python\\smart-law-notes\\src"
-)
-
-from markdown_parser import parse_line
+from src.markdown_parser import parse_line
 
 # Read the actual file
 file_path = r"c:\Users\joesa\OneDrive\Documents\law-school-python\smart-law-notes\tests\markdown\Bussel 10.21.2025.md"

@@ -4,16 +4,11 @@ Tests downloading m4a files from Google Drive to local lecture-input folders.
 Ensure that as main.py and drive_downloader.py change, so do the tests here.
 """
 
-import sys
 from pathlib import Path
 
-# Add src directory to path
-src_path = Path(__file__).parent.parent / "src"
-sys.path.insert(0, str(src_path))
-
-from config import CLASSES
-from drive_downloader import download_from_drive
-from logger_config import setup_logging, get_logger
+from src.config import CLASSES
+from src.drive_downloader import download_from_drive
+from src.logger_config import setup_logging, get_logger
 
 # Initialize logger
 logger = get_logger(__name__)

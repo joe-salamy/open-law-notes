@@ -1,12 +1,6 @@
 """Test the markdown parser fix for bold and italic nesting."""
 
-import sys
-
-sys.path.insert(
-    0, "c:\\Users\\joesa\\OneDrive\\Documents\\law-school-python\\smart-law-notes\\src"
-)
-
-from markdown_parser import parse_inline_styles, parse_line
+from src.markdown_parser import parse_inline_styles, parse_line
 
 # Test case 1: The problematic pattern from the user's file
 test_text = '**_Case Example: Dementas v. Estate of Tallas_ (Referred to as "DeSantis" v. McWilliams/Upper Deck in lecture)**'

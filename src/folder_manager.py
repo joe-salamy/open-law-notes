@@ -6,9 +6,9 @@ Ensures each class has the required folder hierarchy.
 import sys
 from pathlib import Path
 from typing import List
-import config
-from file_mover import setup_output_directory
-from logger_config import get_logger
+from . import config
+from .file_mover import setup_output_directory
+from .logger_config import get_logger
 
 # Initialize logger
 logger = get_logger(__name__)

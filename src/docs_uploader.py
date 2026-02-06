@@ -9,17 +9,17 @@ from pathlib import Path
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
-from logger_config import get_logger
-from markdown_parser import parse_markdown_to_requests
+from .logger_config import get_logger
+from .markdown_parser import parse_markdown_to_requests
 
-from drive_downloader import (
+from .drive_downloader import (
     get_drive_service,
     find_folder_by_name,
     SCOPES,
     TOKEN_FILE,
     CREDENTIALS_FILE,
 )
-from config import (
+from .config import (
     LLM_BASE,
     LECTURE_OUTPUT,
     READING_OUTPUT,

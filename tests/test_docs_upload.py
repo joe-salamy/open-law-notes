@@ -4,14 +4,9 @@ Tests uploading LLM-generated markdown files to Google Docs.
 Tests with the file "Bussel 10.21.2025.md" for the "Contracts" class.
 """
 
-import sys
 from pathlib import Path
 
-# Add src directory to path
-src_path = Path(__file__).parent.parent / "src"
-sys.path.insert(0, str(src_path))
-
-from docs_uploader import (
+from src.docs_uploader import (
     get_drive_service,
     get_docs_service,
     prepend_filename_to_h3,
@@ -19,7 +14,7 @@ from docs_uploader import (
     append_markdown_to_doc,
     process_markdown_file,
 )
-from logger_config import setup_logging, get_logger
+from src.logger_config import setup_logging, get_logger
 
 # Initialize logger
 logger = get_logger(__name__)

@@ -5,7 +5,7 @@ import requests
 from pathlib import Path
 from typing import Tuple, List, Any
 import time
-from logger_config import get_logger
+from .logger_config import get_logger
 
 logger = get_logger(__name__)
 

@@ -7,8 +7,8 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 
-import config
-from logger_config import get_logger
+from . import config
+from .logger_config import get_logger
 
 # Initialize logger
 logger = get_logger(__name__)
