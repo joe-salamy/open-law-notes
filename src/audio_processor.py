@@ -197,7 +197,7 @@ def transcribe_single_file(
 
         if config.USE_CLOUD_GPU:
             # Use cloud GPU transcription
-            from transcribe_client import TranscribeClient
+            from .transcribe_client import TranscribeClient
 
             client = TranscribeClient(config.CLOUD_API_URL, config.CLOUD_API_KEY)
             segments_raw, info, speaker_segments = client.transcribe(
