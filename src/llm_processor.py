@@ -11,10 +11,19 @@ import time
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-from . import config
-from .folder_manager import get_class_paths, get_text_files, get_pdf_files
-from .file_mover import move_to_processed, copy_to_new_outputs
-from .logger_config import get_logger
+try:
+    from . import config
+    from .folder_manager import get_class_paths, get_text_files, get_pdf_files
+    from .file_mover import move_to_processed, copy_to_new_outputs
+    from .logger_config import get_logger
+except ImportError:
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    import src.config as config
+    from src.folder_manager import get_class_paths, get_text_files, get_pdf_files
+    from src.file_mover import move_to_processed, copy_to_new_outputs
+    from src.logger_config import get_logger
 
 # Load environment variables
 load_dotenv()
@@ -499,7 +508,6 @@ def process_class_files(
             model_name=config.GEMINI_MODEL,
             system_instruction=system_prompt,
             generation_config=genai.GenerationConfig(
-                max_output_tokens=config.GEMINI_MAX_OUTPUT_TOKENS,
                 temperature=config.GEMINI_TEMPERATURE,
             ),
         )
@@ -607,7 +615,6 @@ def process_all_lectures(classes: List[Path], new_outputs_dir: Path) -> None:
                 model_name=config.GEMINI_MODEL,
                 system_instruction=system_prompt,
                 generation_config=genai.GenerationConfig(
-                    max_output_tokens=config.GEMINI_MAX_OUTPUT_TOKENS,
                     temperature=config.GEMINI_TEMPERATURE,
                 ),
             )
@@ -767,7 +774,6 @@ def process_all_readings(classes: List[Path], new_outputs_dir: Path) -> None:
                 model_name=config.GEMINI_MODEL,
                 system_instruction=system_prompt,
                 generation_config=genai.GenerationConfig(
-                    max_output_tokens=config.GEMINI_MAX_OUTPUT_TOKENS,
                     temperature=config.GEMINI_TEMPERATURE,
                 ),
             )
