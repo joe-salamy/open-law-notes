@@ -63,7 +63,6 @@ elif ENABLE_DIARIZATION and not USE_CLOUD_GPU:
 
 # Gemini model configuration
 GEMINI_MODEL = "gemini-3-pro-preview"
-GEMINI_MAX_OUTPUT_TOKENS = 32768  # 2^15, max is 2^16 for 3 Pro
 GEMINI_TEMPERATURE = 0.0
 
 # Number of parallel processes/threads
