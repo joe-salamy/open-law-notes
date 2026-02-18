@@ -170,6 +170,36 @@ def get_txt_files(class_folder: Path, reading: bool = False) -> List[Path]:
     return txt_files
 
 
+def get_word_files(class_folder: Path, reading: bool = True) -> List[Path]:
+    """
+    Get all Word document files (.doc and .docx) from reading-input or lecture-input folder.
+
+    Args:
+        class_folder: Path to the class root folder
+        reading: If True, get reading Word docs; if False, get lecture Word docs
+
+    Returns:
+        List of paths to .doc and .docx files
+    """
+    paths = get_class_paths(class_folder)
+    input_folder = paths["reading_input"] if reading else paths["lecture_input"]
+    file_type = "reading" if reading else "lecture"
+
+    logger.debug(f"Searching for {file_type} Word files in: {input_folder}")
+
+    if not input_folder.exists():
+        logger.debug(f"Input folder does not exist: {input_folder}")
+        return []
+
+    doc_files = list(input_folder.glob("*.doc"))
+    docx_files = list(input_folder.glob("*.docx"))
+    word_files = doc_files + docx_files
+    logger.debug(
+        f"Found {len(word_files)} {file_type} Word files ({len(doc_files)} doc, {len(docx_files)} docx) in {input_folder}"
+    )
+    return word_files
+
+
 def get_pdf_files(class_folder: Path, reading: bool = True) -> List[Path]:
     """
     Get all PDF files from reading-input or lecture-input folder.

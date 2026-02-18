@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 try:
     from . import config
-    from .folder_manager import get_class_paths, get_text_files, get_pdf_files
+    from .folder_manager import get_class_paths, get_text_files, get_pdf_files, get_word_files
     from .file_mover import move_to_processed, copy_to_new_outputs
     from .logger_config import get_logger
 except ImportError:
@@ -21,7 +21,7 @@ except ImportError:
 
     sys.path.insert(0, str(Path(__file__).parent.parent))
     import src.config as config
-    from src.folder_manager import get_class_paths, get_text_files, get_pdf_files
+    from src.folder_manager import get_class_paths, get_text_files, get_pdf_files, get_word_files
     from src.file_mover import move_to_processed, copy_to_new_outputs
     from src.logger_config import get_logger
 
@@ -255,6 +255,97 @@ def process_single_pdf(
         return False, f"Error: {str(e)}", input_file
 
 
+def extract_text_from_word(filepath: Path) -> Optional[str]:
+    """
+    Convert a .doc or .docx file to markdown using markitdown.
+
+    Args:
+        filepath: Path to the Word document
+
+    Returns:
+        Markdown-converted content, or None if conversion failed
+    """
+    try:
+        from markitdown import MarkItDown
+    except ImportError:
+        logger.error("markitdown is not installed. Run: pip install markitdown[docx]")
+        return None
+
+    try:
+        logger.debug(f"Converting Word document to markdown: {filepath.name}")
+        md = MarkItDown()
+        result = md.convert(str(filepath))
+        content = result.text_content
+        logger.debug(f"Converted {len(content)} characters from {filepath.name}")
+        return content
+    except Exception as e:
+        logger.error(f"Error converting {filepath.name}: {e}", exc_info=True)
+        return None
+
+
+def process_single_word(
+    args: Tuple[Path, genai.GenerativeModel, Path, Path, Path],
+) -> Tuple[bool, str, Path]:
+    """
+    Process a single Word document (.doc/.docx) by extracting its text and sending to Gemini.
+
+    Args:
+        args: Tuple of (input_file, model, output_folder, processed_folder, new_outputs_dir)
+
+    Returns:
+        Tuple of (success, message, input_file)
+    """
+    (
+        input_file,
+        model,
+        output_folder,
+        processed_folder,
+        new_outputs_dir,
+    ) = args
+
+    try:
+        logger.debug(f"Processing Word file: {input_file.name}")
+
+        # Extract text from Word document
+        content = extract_text_from_word(input_file)
+        if content is None:
+            logger.error(f"Failed to extract text from Word file: {input_file.name}")
+            return False, "Failed to extract text from Word file", input_file
+
+        if not content.strip():
+            logger.error(f"No text content found in Word file: {input_file.name}")
+            return False, "No text content found in Word file", input_file
+
+        # Process with Gemini
+        logger.debug(f"Sending Word document text to Gemini: {input_file.name}")
+        result = process_with_gemini(model, content)
+        if result is None:
+            logger.error(f"Gemini API error for Word file: {input_file.name}")
+            return False, "Gemini API error", input_file
+
+        # Save output markdown
+        output_file = output_folder / f"{input_file.stem}.md"
+        logger.debug(f"Saving output to: {output_file}")
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(result)
+        logger.debug(f"Output saved: {output_file.name}")
+
+        # Copy to new-outputs-safe-delete
+        logger.debug(f"Copying to new-outputs: {output_file.name}")
+        copy_to_new_outputs(output_file, new_outputs_dir)
+
+        # Move input to processed
+        logger.debug(f"Moving to processed: {input_file.name}")
+        move_to_processed(input_file, processed_folder)
+
+        logger.info(f"Successfully processed: {input_file.name}")
+        return True, "Success", input_file
+
+    except Exception as e:
+        logger.error(f"Error processing {input_file.name}: {e}", exc_info=True)
+        return False, f"Error: {str(e)}", input_file
+
+
 def process_single_file(
     args: Tuple[Path, genai.GenerativeModel, Path, Path, Path, bool],
 ) -> Tuple[bool, str, Path]:
@@ -436,6 +527,67 @@ def execute_parallel_pdf_processing(
     return successful, failed
 
 
+def execute_parallel_word_processing(
+    task_args: List[Tuple[Path, genai.GenerativeModel, Path, Path, Path]],
+    total_files: int,
+) -> Tuple[int, int]:
+    """
+    Execute parallel processing of Word files using ThreadPoolExecutor.
+
+    Args:
+        task_args: List of argument tuples for process_single_word
+        total_files: Total number of Word files to process
+
+    Returns:
+        Tuple of (successful_count, failed_count)
+    """
+    successful = 0
+    failed = 0
+
+    logger.debug(
+        f"Starting parallel processing of {total_files} Word files with {config.MAX_LLM_WORKERS} workers"
+    )
+    with ThreadPoolExecutor(max_workers=config.MAX_LLM_WORKERS) as executor:
+        futures = {
+            executor.submit(process_single_word, args): args[0] for args in task_args
+        }
+
+        for future in as_completed(futures):
+            input_file = futures[future]
+            try:
+                success, message, original_file = future.result()
+
+                if success:
+                    successful += 1
+                    logger.info(
+                        f"✓ [{successful + failed}/{total_files}] {original_file.name}"
+                    )
+                    logger.debug(f"Successfully processed Word file {original_file.name}")
+                else:
+                    failed += 1
+                    logger.info(
+                        f"✗ [{successful + failed}/{total_files}] {original_file.name}: {message}"
+                    )
+                    logger.error(
+                        f"Failed to process Word file {original_file.name}: {message}"
+                    )
+
+            except Exception as e:
+                failed += 1
+                logger.error(
+                    f"Unexpected error processing Word file {input_file.name}: {e}",
+                    exc_info=True,
+                )
+                logger.info(
+                    f"✗ [{successful + failed}/{total_files}] {input_file.name}: Unexpected error: {e}"
+                )
+
+    logger.debug(
+        f"Word parallel processing complete: {successful} successful, {failed} failed"
+    )
+    return successful, failed
+
+
 def process_class_files(
     class_folder: Path, is_reading: bool, new_outputs_dir: Path, api_key: str
 ) -> Tuple[int, int]:
@@ -459,6 +611,7 @@ def process_class_files(
     if is_reading:
         text_files = get_text_files(class_folder, reading=True)
         pdf_files = get_pdf_files(class_folder, reading=True)
+        word_files = get_word_files(class_folder, reading=True)
         output_folder = paths["reading_output"]
         processed_folder = paths["reading_processed"]
         prompt_file = config.READING_PROMPT_FILE
@@ -466,6 +619,7 @@ def process_class_files(
     else:
         text_files = get_text_files(class_folder, reading=False)
         pdf_files = get_pdf_files(class_folder, reading=False)
+        word_files = get_word_files(class_folder, reading=False)
         output_folder = paths["lecture_output"]
         processed_folder = paths["lecture_processed_txt"]
         prompt_file = config.LECTURE_PROMPT_FILE
@@ -473,16 +627,17 @@ def process_class_files(
 
     logger.debug(f"Processing {file_type} files for {class_name}")
 
-    total_files = len(text_files) + len(pdf_files)
+    total_files = len(text_files) + len(pdf_files) + len(word_files)
     if total_files == 0:
         logger.info(f"No {file_type} files found")
         return 0, 0
 
     logger.info(
-        f"Found {total_files} {file_type} file(s) ({len(text_files)} text, {len(pdf_files)} PDF)"
+        f"Found {total_files} {file_type} file(s) ({len(text_files)} text, {len(pdf_files)} PDF, {len(word_files)} Word)"
     )
     logger.debug(f"{file_type} text files: {[f.name for f in text_files]}")
     logger.debug(f"{file_type} PDF files: {[f.name for f in pdf_files]}")
+    logger.debug(f"{file_type} Word files: {[f.name for f in word_files]}")
 
     # Load system prompt
     try:
@@ -557,6 +712,25 @@ def process_class_files(
         ]
         successful, failed = execute_parallel_pdf_processing(
             pdf_task_args, len(pdf_files)
+        )
+        total_successful += successful
+        total_failed += failed
+
+    # Process Word files (.doc, .docx)
+    if word_files:
+        logger.debug(f"Processing {len(word_files)} Word files for {class_name}")
+        word_task_args = [
+            (
+                word_file,
+                model,
+                output_folder,
+                processed_folder,
+                new_outputs_dir,
+            )
+            for word_file in word_files
+        ]
+        successful, failed = execute_parallel_word_processing(
+            word_task_args, len(word_files)
         )
         total_successful += successful
         total_failed += failed
@@ -746,6 +920,7 @@ def process_all_readings(classes: List[Path], new_outputs_dir: Path) -> None:
     # Collect all files and create models for each class
     all_text_task_args = []
     all_pdf_task_args = []
+    all_word_task_args = []
     class_file_counts = {}
 
     for class_folder in classes:
@@ -754,14 +929,15 @@ def process_all_readings(classes: List[Path], new_outputs_dir: Path) -> None:
 
         text_files = get_text_files(class_folder, reading=True)
         pdf_files = get_pdf_files(class_folder, reading=True)
-        class_file_counts[class_name] = len(text_files) + len(pdf_files)
+        word_files = get_word_files(class_folder, reading=True)
+        class_file_counts[class_name] = len(text_files) + len(pdf_files) + len(word_files)
 
-        if not text_files and not pdf_files:
+        if not text_files and not pdf_files and not word_files:
             logger.info(f"{class_name}: No reading files found")
             continue
 
         logger.info(
-            f"{class_name}: {len(text_files)} text, {len(pdf_files)} PDF file(s)"
+            f"{class_name}: {len(text_files)} text, {len(pdf_files)} PDF, {len(word_files)} Word file(s)"
         )
 
         # Create model for this class
@@ -808,7 +984,20 @@ def process_all_readings(classes: List[Path], new_outputs_dir: Path) -> None:
                 )
             )
 
-    total_files = len(all_text_task_args) + len(all_pdf_task_args)
+        # Add Word file tasks (.doc, .docx)
+        for word_file in word_files:
+            all_word_task_args.append(
+                (
+                    word_file,
+                    model,
+                    paths["reading_output"],
+                    paths["reading_processed"],
+                    new_outputs_dir,
+                    class_name,  # for tracking
+                )
+            )
+
+    total_files = len(all_text_task_args) + len(all_pdf_task_args) + len(all_word_task_args)
     if total_files == 0:
         logger.info("No reading files found in any class")
         return
@@ -832,8 +1021,13 @@ def process_all_readings(classes: List[Path], new_outputs_dir: Path) -> None:
             executor.submit(process_single_pdf, args[:5]): args
             for args in all_pdf_task_args
         }
+        # Submit Word file tasks (.doc, .docx)
+        word_futures = {
+            executor.submit(process_single_word, args[:5]): args
+            for args in all_word_task_args
+        }
 
-        all_futures = {**text_futures, **pdf_futures}
+        all_futures = {**text_futures, **pdf_futures, **word_futures}
 
         for future in as_completed(all_futures):
             args = all_futures[future]
