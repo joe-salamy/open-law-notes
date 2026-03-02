@@ -1,0 +1,91 @@
+"""
+Configuration settings for OpenLawNotes.
+Edit the settings below to match your setup before running for the first time.
+"""
+
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# ========== EDIT THESE PATHS ==========
+
+# List your class folders here — one Path(...) line per class.
+#
+# Each path should point to the ROOT folder for that class
+# (not the open-law-notes/ subfolder — that is created automatically).
+#
+# To add a class:    add a new Path(...) line
+# To remove a class: comment out or delete the line
+# New semester:      update this list to your new classes
+#
+# Example (Windows):
+#   Path("C:/Users/YourName/Documents/Law school/Contracts"),
+# Example (Mac):
+#   Path("/Users/YourName/Documents/Law school/Contracts"),
+CLASSES = [
+    Path("C:/Users/YourName/Documents/Law school/Class 1"),
+    Path("C:/Users/YourName/Documents/Law school/Class 2"),
+]
+
+# ========== GOOGLE DRIVE SETTINGS ==========
+
+# Set to False if you don't use Google Drive
+# (you'll drop files manually into the input folders instead)
+ENABLE_GOOGLE_DRIVE = True
+
+# Parent folder ID in Google Drive containing your class subfolders.
+# See the README for instructions on finding your folder ID.
+DRIVE_PARENT_FOLDER_ID = "your-google-drive-folder-id-here"
+
+# ========== ASSEMBLYAI SETTINGS ==========
+
+ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
+if not ASSEMBLYAI_API_KEY:
+    raise ValueError("ASSEMBLYAI_API_KEY environment variable is required.")
+
+# ========== SPEAKER DIARIZATION SETTINGS ==========
+
+# Enable speaker diarization
+ENABLE_DIARIZATION = True  # Set True to enable speaker identification
+
+# Optional speaker count hint (None = auto-detect)
+MAX_SPEAKERS = None  # e.g., 3 for "at most 3 speakers"
+
+# Gemini model configuration
+GEMINI_MODEL = "gemini-3.1-pro-preview"
+GEMINI_TEMPERATURE = 0.0
+
+# Number of parallel threads (I/O-bound)
+MAX_AUDIO_WORKERS = 2
+MAX_LLM_WORKERS = 5  # Multithreading for I/O-bound API calls
+
+# ========== FOLDER STRUCTURE ==========
+
+# These define the expected folder structure within each class.
+# Changing LLM_BASE renames the auto-created subfolder in every class folder.
+LLM_BASE = "open-law-notes"
+
+LECTURE_INPUT = "lecture-input"
+LECTURE_OUTPUT = "lecture-output"
+LECTURE_PROCESSED = "lecture-processed"
+LECTURE_PROCESSED_AUDIO = "audio"
+LECTURE_PROCESSED_TXT = "txt"
+
+READING_INPUT = "reading-input"
+READING_OUTPUT = "reading-output"
+READING_PROCESSED = "reading-processed"
+
+# ========== PROMPT FILES ==========
+
+PROMPT_DIR = Path("prompts")
+LECTURE_PROMPT_FILE = "lecture.md"
+READING_PROMPT_FILE = "reading.md"
+
+# ========== OUTPUT DIRECTORY ==========
+
+# A copy of every generated note is placed here for easy access.
+# This folder is relative to the project root and is in .gitignore.
+NEW_OUTPUTS_DIR = Path("new-outputs-safe-delete")

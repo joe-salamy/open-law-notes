@@ -211,43 +211,6 @@ def format_speaker_label(speaker: str) -> str:
         return speaker  # Return as-is if parsing fails
 
 
-def assign_speakers_to_segments(
-    segments_list: List, speaker_segments: List[dict]
-) -> List:
-    """
-    Assign speaker labels to transcription segments via timestamp overlap.
-
-    Uses maximum overlap algorithm: each transcription segment is assigned to the speaker
-    whose time range has the most overlap with the segment's timestamps.
-
-    Args:
-        segments_list: List of transcription segments from faster-whisper
-        speaker_segments: List of speaker diarization segments with {start, end, speaker}
-
-    Returns:
-        Updated segments_list with speaker attribute added to each segment
-    """
-    for seg in segments_list:
-        seg_start, seg_end = seg.start, seg.end
-        best_speaker = None
-        max_overlap = 0.0
-
-        for spk_seg in speaker_segments:
-            # Calculate overlap duration
-            overlap_start = max(seg_start, spk_seg["start"])
-            overlap_end = min(seg_end, spk_seg["end"])
-            overlap = max(0, overlap_end - overlap_start)
-
-            if overlap > max_overlap:
-                max_overlap = overlap
-                best_speaker = spk_seg["speaker"]
-
-        # Assign speaker (or UNKNOWN if no overlap found)
-        seg.speaker = best_speaker if best_speaker else "UNKNOWN"
-
-    return segments_list
-
-
 def format_transcription_with_speakers(
     segments_list: List,
     paragraph_gap: float = 3.0,

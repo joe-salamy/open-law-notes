@@ -30,16 +30,6 @@ dist/
 *.log
 logs/
 
-# ML Models and Cache (faster-whisper, PyTorch, etc.)
-models/
-.cache/
-*.pt
-*.pth
-*.bin
-*.onnx
-hub/
-checkpoints/
-
 # Audio processing temporary files
 *.wav
 *.m4a
@@ -61,3 +51,9 @@ new-outputs-safe-delete/
 *.txt.gz
 *.zip
 *.tar.gz
+
+# Scratchpad
+scratchpad.md
+
+# Local config (copy of config.py.example with your personal paths)
+src/config.py

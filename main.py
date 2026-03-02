@@ -6,7 +6,7 @@ Processes lecture audio and reading text files for multiple classes.
 import sys
 import argparse
 from pathlib import Path
-from src.config import CLASSES
+from src.config import CLASSES, ENABLE_GOOGLE_DRIVE
 from src.llm_processor import process_all_readings, process_all_lectures
 from src.folder_manager import verify_and_create_folders
 from src.file_mover import setup_output_directory
@@ -53,7 +53,7 @@ def main():
         sys.exit(1)
 
     # Download files from Google Drive
-    if not reading_only_mode:
+    if not reading_only_mode and ENABLE_GOOGLE_DRIVE:
         logger.info("=" * 70)
         logger.info("STEP 0: Downloading Files from Google Drive")
         logger.info("=" * 70)
@@ -73,7 +73,10 @@ def main():
             logger.info("Continuing with local files...")
     else:
         logger.info("=" * 70)
-        logger.info("STEP 0: Skipped (Reading-only mode)")
+        if reading_only_mode:
+            logger.info("STEP 0: Skipped (reading-only mode)")
+        else:
+            logger.info("STEP 0: Skipped (Google Drive disabled)")
         logger.info("=" * 70)
 
     # Verify all class folders have correct structure
@@ -141,35 +144,6 @@ def main():
     except Exception as e:
         logger.error(f"✗ Error processing readings: {e}", exc_info=True)
         sys.exit(1)
-
-    """
-    # Upload notes to Google Docs
-    logger.info("=" * 70)
-    logger.info("STEP 5: Uploading Notes to Google Docs")
-    logger.info("=" * 70)
-
-    try:
-        logger.debug("Starting Google Docs upload")
-        upload_results = upload_to_docs(CLASSES)
-
-        total_lectures = sum(r.get("lecture", 0) for r in upload_results.values())
-        total_readings = sum(r.get("reading", 0) for r in upload_results.values())
-        logger.info(
-            f"✓ Uploaded {total_lectures} lecture note(s) and {total_readings} reading note(s)"
-        )
-
-        for class_name, counts in upload_results.items():
-            if "error" in counts:
-                logger.warning(f"{class_name}: Error - {counts['error']}")
-            else:
-                logger.debug(
-                    f"{class_name}: {counts['lecture']} lecture(s), {counts['reading']} reading(s)"
-                )
-        logger.debug("Google Docs upload completed")
-    except Exception as e:
-        logger.error(f"✗ Error uploading to Google Docs: {e}", exc_info=True)
-        logger.info("Note generation completed, but upload to Docs failed.") 
-    """
 
     # Final summary
     logger.info("=" * 70)

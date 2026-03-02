@@ -1,20 +1,17 @@
 """
-Audio transcription using faster-whisper with CPU optimization.
+Audio transcription using AssemblyAI.
 Orchestrates transcription workflow: preprocessing, transcription, and file management.
 """
 
 import logging
-import os
-import sys
-import time
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Tuple
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from types import SimpleNamespace
 from dotenv import load_dotenv
 
+import assemblyai as aai
 import soundfile as sf
-from faster_whisper import WhisperModel
 from tqdm import tqdm
 
 from . import config
@@ -23,7 +20,6 @@ from .file_mover import move_audio_to_processed
 from .logger_config import get_logger
 from .audio_helper import (
     preprocess_audio,
-    assign_speakers_to_segments,
     format_transcription_with_speakers,
 )
 
@@ -32,88 +28,6 @@ load_dotenv()
 
 # Initialize logger
 logger = get_logger(__name__)
-
-
-# Module-level cache for the worker process
-_WORKER_MODEL = None
-_LOG_FILE_PATH = None  # Store log file path for workers
-
-
-def _worker_init(
-    model_name: str,
-    device: str,
-    compute_type: str,
-    cpu_threads: int,
-    log_file_path: str = None,
-):
-    """Initializer for worker processes: load the faster-whisper model once per worker.
-
-    Args:
-        model_name: Whisper model size (e.g., 'large-v3')
-        device: 'cpu' or 'cuda'
-        compute_type: 'int8' for CPU, 'float16' for GPU
-        cpu_threads: Number of CPU threads to use
-        log_file_path: Path to the log file (for worker logging)
-    """
-    global _WORKER_MODEL
-
-    worker_logger = logging.getLogger("law_school_notes")
-    worker_logger.setLevel(logging.INFO)  # Use INFO for workers to reduce clutter
-
-    # Add handlers for worker logging
-    if not worker_logger.handlers:
-        # Console handler for immediate output
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(logging.INFO)
-        console_formatter = logging.Formatter(
-            "[WORKER-%(process)d] %(levelname)s: %(message)s"
-        )
-        console_handler.setFormatter(console_formatter)
-        worker_logger.addHandler(console_handler)
-
-        # File handler to write to the same log file as main process
-        if log_file_path:
-            file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
-            file_handler.setLevel(logging.DEBUG)  # Capture all worker details
-            file_formatter = logging.Formatter(
-                "%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | [PID-%(process)d] %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
-            )
-            file_handler.setFormatter(file_formatter)
-            worker_logger.addHandler(file_handler)
-
-    # Skip model loading if using cloud GPU
-    if config.USE_CLOUD_GPU:
-        worker_logger.info(
-            f"Worker initialized (cloud GPU mode - skipping local model load)"
-        )
-        _WORKER_MODEL = None
-        return
-
-    try:
-        # Set HuggingFace token for authenticated downloads
-        hf_token = os.getenv("HF_TOKEN")
-        if hf_token:
-            os.environ["HF_TOKEN"] = hf_token
-            worker_logger.debug(f"HF_TOKEN configured for model download")
-
-        worker_logger.info(
-            f"Worker initializing: {model_name} on {device} with {compute_type} (this may take a minute...)"
-        )
-        worker_logger.info(f"Loading Whisper model...")
-        _WORKER_MODEL = WhisperModel(
-            model_name,
-            device=device,
-            compute_type=compute_type,
-            cpu_threads=cpu_threads,
-        )
-        worker_logger.info(
-            f"✓ Whisper model loaded successfully in worker process {os.getpid()}"
-        )
-    except Exception as e:
-        worker_logger.error(f"Error loading model in worker: {e}", exc_info=True)
-        _WORKER_MODEL = None
-        raise  # Re-raise to prevent silent failures
 
 
 def transcribe_single_file(
@@ -133,165 +47,82 @@ def transcribe_single_file(
 
     try:
         logger.info(f"[WORKER START] Processing: {audio_file.name}")
-        # Use the worker-global model (only checked if using local CPU)
-        global _WORKER_MODEL
-        if not config.USE_CLOUD_GPU and _WORKER_MODEL is None:
-            logger.error(f"[ERROR] Model not loaded in worker for {audio_file.name}")
-            return (
-                False,
-                "Model not loaded in worker",
-                audio_file,
-                None,
-                processed_audio_folder,
-                class_name,
-            )
-
-        if not config.USE_CLOUD_GPU:
-            logger.debug(f"[MODEL CHECK] Worker model ready for {audio_file.name}")
 
         # Step 1: Preprocess audio
         logger.info(f"[PREPROCESSING START] {audio_file.name}")
         audio_data, sample_rate = preprocess_audio(audio_file)
         duration_minutes = len(audio_data) / sample_rate / 60
-        total_duration_seconds = len(audio_data) / sample_rate
         logger.info(
             f"[PREPROCESSING DONE] {audio_file.name} - Audio Length: {duration_minutes:.1f} minutes"
         )
 
-        # Save preprocessed audio to permanent WAV file in input folder
+        # Save preprocessed audio to WAV file in output folder
         wav_filename = audio_file.stem + ".wav"
         wav_file_path = output_folder / wav_filename
         logger.debug(f"Saving preprocessed WAV file: {wav_filename}")
-
-        # Save audio data using soundfile
         sf.write(str(wav_file_path), audio_data, sample_rate)
         logger.debug(f"Saved preprocessed audio to {wav_filename}")
 
-        # For cloud GPU: compress to FLAC to reduce upload time
-        upload_file_path = wav_file_path
-        if config.USE_CLOUD_GPU:
-            flac_filename = wav_file_path.stem + ".flac"
-            flac_file_path = wav_file_path.parent / flac_filename
-            logger.debug(f"Compressing to FLAC for faster upload: {flac_filename}")
-            sf.write(str(flac_file_path), audio_data, sample_rate, format="FLAC")
-            original_size_mb = wav_file_path.stat().st_size / 1_000_000
-            compressed_size_mb = flac_file_path.stat().st_size / 1_000_000
-            logger.debug(
-                f"Compressed {original_size_mb:.1f}MB -> {compressed_size_mb:.1f}MB ({compressed_size_mb/original_size_mb*100:.0f}% of original)"
-            )
-            upload_file_path = flac_file_path
+        # Step 2: Transcribe with AssemblyAI
+        logger.info(f"[TRANSCRIPTION START] {audio_file.name}")
 
-        # Step 2: Transcribe with timestamps
-        if config.USE_CLOUD_GPU:
-            # Cloud GPU: network overhead + GPU processing (~5x real-time)
-            network_overhead = 5  # minutes for upload
-            gpu_time = duration_minutes / 10
-            estimated_minutes = network_overhead + gpu_time
-            eta_msg = f"Will take ~{estimated_minutes:.1f} minutes (cloud GPU)"
+        aai.settings.api_key = config.ASSEMBLYAI_API_KEY
+        transcription_config = aai.TranscriptionConfig(
+            speech_model=aai.SpeechModel.best,
+            language_code="en",
+            speaker_labels=config.ENABLE_DIARIZATION,
+            speakers_expected=config.MAX_SPEAKERS,
+        )
+        transcriber = aai.Transcriber()
+        transcript = transcriber.transcribe(
+            str(wav_file_path), config=transcription_config
+        )
+
+        if transcript.status == aai.TranscriptStatus.error:
+            raise RuntimeError(f"AssemblyAI transcription error: {transcript.error}")
+
+        # Build segments list from AssemblyAI result
+        if config.ENABLE_DIARIZATION:
+            segments_list = [
+                SimpleNamespace(
+                    start=u.start / 1000.0,
+                    end=u.end / 1000.0,
+                    text=u.text,
+                    speaker=u.speaker,
+                )
+                for u in transcript.utterances
+            ]
         else:
-            # Local CPU: ~3x real-time
-            estimated_minutes = 3 * duration_minutes
-            eta_msg = f"Will take ~{estimated_minutes:.1f} minutes (local CPU)"
-
-        logger.info(f"[TRANSCRIPTION START] {audio_file.name} - {eta_msg}")
-
-        if config.USE_CLOUD_GPU:
-            # Use cloud GPU transcription
-            from .transcribe_client import TranscribeClient
-
-            client = TranscribeClient(config.CLOUD_API_URL, config.CLOUD_API_KEY)
-            segments_raw, info, speaker_segments = client.transcribe(
-                upload_file_path,
-                beam_size=5,
-                language="en",
-                word_timestamps=False,
-                enable_diarization=config.ENABLE_DIARIZATION,
-                min_speakers=config.MIN_SPEAKERS,
-                max_speakers=config.MAX_SPEAKERS,
-            )
-            # Convert to list for compatibility with existing code
-            segments = list(segments_raw)
-        else:
-            # Fallback to local CPU model (no diarization support)
-            segments, info = _WORKER_MODEL.transcribe(
-                str(wav_file_path),
-                beam_size=5,
-                language="en",
-                word_timestamps=False,  # Use segment-level timestamps
-            )
-            speaker_segments = None  # Local CPU doesn't support diarization
-
-        # Process segments as they're generated (this is the bottleneck)
-        start_time = time.time()
-        segments_list = []
-        segment_count = 0
-        last_segment_end = 0.0  # Track audio time processed (in seconds)
-        for segment in segments:
-            segments_list.append(segment)
-            segment_count += 1
-            last_segment_end = segment.end  # Update audio time processed
-
-            # Log progress every 25 segments (only for local CPU mode)
-            if not config.USE_CLOUD_GPU and segment_count % 25 == 0:
-                elapsed_time = time.time() - start_time
-                percent_complete = (last_segment_end / total_duration_seconds) * 100
-
-                # Calculate ETA based on audio processed
-                if last_segment_end > 0:
-                    estimated_total_time = elapsed_time / (
-                        last_segment_end / total_duration_seconds
-                    )
-                    eta_seconds = estimated_total_time - elapsed_time
-                    eta_minutes = eta_seconds / 60
-
-                    # Calculate actual ETA time
-                    eta_time = datetime.now() + timedelta(seconds=eta_seconds)
-                    eta_time_str = eta_time.strftime("%I:%M %p")
-
-                    logger.info(
-                        f"[PROGRESS] {audio_file.name} - {segment_count} segments | "
-                        f"{percent_complete:.1f}% audio processed | "
-                        f"Elapsed: {elapsed_time/60:.1f} min | Time remaining: {eta_minutes:.1f} min | ETA: {eta_time_str}"
-                    )
-                else:
-                    logger.info(
-                        f"[PROGRESS] {audio_file.name} - {segment_count} segments | "
-                        f"Elapsed: {elapsed_time/60:.1f} min"
-                    )
+            segments_list = [
+                SimpleNamespace(
+                    start=s.start / 1000.0,
+                    end=s.end / 1000.0,
+                    text=s.text,
+                    speaker=None,
+                )
+                for s in transcript.sentences
+            ]
 
         total_segments = len(segments_list)
-        elapsed_time = time.time() - start_time
         logger.info(
-            f"[TRANSCRIPTION COMPLETE] {audio_file.name} - Total: {total_segments} segments in {elapsed_time/60:.1f} min"
+            f"[TRANSCRIPTION COMPLETE] {audio_file.name} - Total: {total_segments} segments"
         )
 
-        # Step 3: Assign speakers to segments if diarization was enabled
-        if speaker_segments:
-            logger.info(f"[SPEAKER ASSIGNMENT START] Assigning speakers to segments")
-            segments_list = assign_speakers_to_segments(segments_list, speaker_segments)
-            logger.info(
-                f"[SPEAKER ASSIGNMENT COMPLETE] Speakers assigned to {total_segments} segments"
-            )
-
-        # Step 4: Format transcription with paragraph-based timestamps (token-efficient)
+        # Step 3: Format transcription with paragraph-based timestamps
         transcription = format_transcription_with_speakers(
             segments_list,
-            paragraph_gap=3.0,  # Start new paragraph after 3+ seconds of silence
-            max_paragraph_duration=120.0,  # Max 2 minutes per paragraph
-            include_speakers=bool(speaker_segments),  # Include speakers if available
+            paragraph_gap=3.0,
+            max_paragraph_duration=120.0,
+            include_speakers=config.ENABLE_DIARIZATION,
         )
 
-        # Count paragraphs for logging
         paragraph_count = transcription.count("[")
-        speaker_msg = " with speaker labels" if speaker_segments else ""
+        speaker_msg = " with speaker labels" if config.ENABLE_DIARIZATION else ""
         logger.info(
             f"[FORMATTING COMPLETE] {audio_file.name} - Created {paragraph_count} paragraphs from {total_segments} segments{speaker_msg}"
         )
-        logger.info(
-            f"Token reduction: ~{((total_segments - paragraph_count) / total_segments * 100):.0f}% fewer timestamps"
-        )
 
-        # Step 5: Save to txt file
+        # Step 4: Save to txt file
         txt_filename = audio_file.stem + ".txt"
         txt_output_path = output_folder / txt_filename
         logger.info(
@@ -304,14 +135,6 @@ def transcribe_single_file(
         logger.info(f"[SAVE COMPLETE] {txt_filename}")
         logger.info(f"[WORKER COMPLETE] ✓ Successfully transcribed: {audio_file.name}")
         logger.info(f"Preprocessed WAV saved as: {wav_filename}")
-
-        # Cleanup FLAC file if we created one for cloud upload
-        if config.USE_CLOUD_GPU and upload_file_path != wav_file_path:
-            try:
-                upload_file_path.unlink()
-                logger.debug(f"Cleaned up temporary FLAC file: {upload_file_path.name}")
-            except Exception as e:
-                logger.warning(f"Failed to cleanup FLAC file: {e}")
 
         return (
             True,
@@ -334,186 +157,17 @@ def transcribe_single_file(
         )
 
 
-def process_class_lectures(
-    class_folder: Path,
-    model_name: str,
-    device: str,
-    compute_type: str,
-    cpu_threads: int,
-) -> Tuple[int, int]:
-    """
-    Process all lecture audio files for a single class.
-
-    Args:
-        class_folder: Path to the class root folder
-        model_name: Whisper model to use
-        device: 'cpu' or 'cuda'
-        compute_type: 'int8' for CPU, 'float16' for GPU
-        cpu_threads: Number of CPU threads to use
-
-    Returns:
-        Tuple of (successful_count, failed_count)
-    """
-    paths = get_class_paths(class_folder)
-    class_name = paths["class_name"]
-
-    audio_files = get_audio_files(class_folder)
-
-    if not audio_files:
-        logger.info(f"No audio files found")
-        logger.debug(f"No audio files in {paths['lecture_input']}")
-        return 0, 0
-
-    logger.info(f"Found {len(audio_files)} audio file(s)")
-    logger.debug(f"Audio files: {[f.name for f in audio_files]}")
-
-    # Prepare arguments for parallel processing
-    task_args = [(audio_file, paths["lecture_input"]) for audio_file in audio_files]
-
-    successful = 0
-    failed = 0
-
-    max_workers = (
-        config.MAX_AUDIO_WORKERS_CLOUD_GPU
-        if config.USE_CLOUD_GPU
-        else config.MAX_AUDIO_WORKERS_LOCAL_CPU
-    )
-    logger.debug(f"Starting parallel transcription with {max_workers} workers")
-
-    # Get log file path from the main logger to pass to workers
-    log_file_path = None
-    main_logger = logging.getLogger("law_school_notes")
-    for handler in main_logger.handlers:
-        if isinstance(handler, logging.FileHandler):
-            log_file_path = handler.baseFilename
-            break
-
-    # Log explanation (progress bar only updates when files complete)
-    logger.info(
-        f"Note: Progress bar updates when files complete. Watch log file for detailed progress."
-    )
-    if log_file_path:
-        logger.info(f"Monitor with: Get-Content '{log_file_path}' -Wait -Tail 50")
-
-    # Process files in parallel with progress bar
-    # Use ThreadPoolExecutor for cloud GPU (I/O-bound), ProcessPoolExecutor for local CPU (CPU-bound)
-    if config.USE_CLOUD_GPU:
-        executor_class = ThreadPoolExecutor
-        executor_kwargs = {"max_workers": config.MAX_AUDIO_WORKERS_CLOUD_GPU}
-    else:
-        executor_class = ProcessPoolExecutor
-        executor_kwargs = {
-            "max_workers": config.MAX_AUDIO_WORKERS_LOCAL_CPU,
-            "initializer": _worker_init,
-            "initargs": (model_name, device, compute_type, cpu_threads, log_file_path),
-        }
-
-    with executor_class(**executor_kwargs) as executor:
-        futures = {
-            executor.submit(transcribe_single_file, args): args[0] for args in task_args
-        }
-
-        # Progress bar for transcription
-        with tqdm(total=len(audio_files), desc="Transcribing", unit="file") as pbar:
-            for future in as_completed(futures):
-                audio_file = futures[future]
-                try:
-                    success, message, original_file, wav_file = future.result()
-
-                    if success:
-                        successful += 1
-                        logger.debug(f"Transcription successful: {original_file.name}")
-                        # Move the original audio file to the processed audio folder
-                        moved = move_audio_to_processed(
-                            original_file, paths["lecture_processed_audio"]
-                        )
-
-                        # Move the WAV file to the processed audio folder
-                        wav_moved = False
-                        if wav_file and wav_file.exists():
-                            wav_moved = move_audio_to_processed(
-                                wav_file, paths["lecture_processed_audio"]
-                            )
-                            if wav_moved:
-                                logger.debug(
-                                    f"WAV file moved to processed: {wav_file.name}"
-                                )
-                            else:
-                                logger.warning(
-                                    f"Failed to move WAV file: {wav_file.name}"
-                                )
-
-                        if moved and wav_moved:
-                            moved_msg = "moved to processed audio"
-                            logger.debug(
-                                f"Audio files moved to processed: {original_file.name}, {wav_file.name}"
-                            )
-                        elif moved:
-                            moved_msg = "original moved, WAV failed"
-                            logger.warning(
-                                f"Only original audio moved: {original_file.name}"
-                            )
-                        else:
-                            moved_msg = "failed to move audio"
-                            logger.warning(
-                                f"Failed to move audio file: {original_file.name}"
-                            )
-
-                        pbar.write(f"✓ {original_file.name} (d{moved_msg})")
-                    else:
-                        failed += 1
-                        logger.error(
-                            f"Transcription failed for {original_file.name}: {message}"
-                        )
-                        pbar.write(f"✗ {original_file.name}: {message}")
-
-                except Exception as e:
-                    failed += 1
-                    logger.error(
-                        f"Unexpected error processing {audio_file.name}: {e}",
-                        exc_info=True,
-                    )
-                    pbar.write(f"✗ {audio_file.name}: Unexpected error: {e}")
-
-                pbar.update(1)
-
-    logger.debug(
-        f"Class transcription complete: {successful} successful, {failed} failed"
-    )
-    return successful, failed
-
-
 def process_all_lectures(classes: List[Path]) -> None:
     """
-    Process lecture audio files for all classes with CPU-optimized settings.
-    Parallelizes across ALL classes, not just within each class.
+    Process lecture audio files for all classes.
+    Parallelizes across ALL classes using a thread pool (I/O-bound).
 
     Args:
         classes: List of class folder paths
     """
-    # Configuration for transcription
-    if config.USE_CLOUD_GPU:
-        logger.info(f"Using cloud GPU transcription")
-        logger.info(f"Cloud API: {config.CLOUD_API_URL}")
-        logger.info(f"Concurrent uploads: {config.MAX_AUDIO_WORKERS_CLOUD_GPU}")
-        logger.info(f"Speaker diarization: {config.ENABLE_DIARIZATION}")
-        # These parameters are only used for local fallback if cloud fails
-        device = "cpu"
-        compute_type = "int8"
-        cpu_threads = 4
-        model_name = "large-v3"
-    else:
-        # CPU-optimized configuration (per instructions)
-        device = "cpu"
-        compute_type = "int8"  # Faster CPU inference with minimal accuracy loss
-        cpu_threads = 4  # Safe limit to avoid overheating/crashing
-        model_name = "large-v3"  # Most accurate Whisper model
-        logger.info(f"Using local CPU transcription")
-        logger.info(f"Model: {model_name}")
-        logger.info(f"Device: {device} (compute_type: {compute_type})")
-        logger.info(f"CPU threads: {cpu_threads}")
-        logger.info(f"Parallel workers: {config.MAX_AUDIO_WORKERS_LOCAL_CPU}")
-
+    logger.info(f"Using AssemblyAI transcription (Universal-2 model)")
+    logger.info(f"Concurrent uploads: {config.MAX_AUDIO_WORKERS}")
+    logger.info(f"Speaker diarization: {config.ENABLE_DIARIZATION}")
     logger.debug(f"Processing {len(classes)} classes for audio transcription")
 
     # Collect all audio files from all classes
@@ -528,7 +182,6 @@ def process_all_lectures(classes: List[Path]) -> None:
         class_file_counts[class_name] = len(audio_files)
 
         for audio_file in audio_files:
-            # Include processed_audio_folder and class_name for post-processing
             all_task_args.append(
                 (
                     audio_file,
@@ -549,7 +202,7 @@ def process_all_lectures(classes: List[Path]) -> None:
     total_files = len(all_task_args)
     logger.info(f"Total audio files to process: {total_files}")
 
-    # Get log file path from the main logger to pass to workers
+    # Get log file path from the main logger
     log_file_path = None
     main_logger = logging.getLogger("law_school_notes")
     for handler in main_logger.handlers:
@@ -568,20 +221,8 @@ def process_all_lectures(classes: List[Path]) -> None:
     total_successful = 0
     total_failed = 0
 
-    # Process ALL files from ALL classes in a single pool
-    # Use ThreadPoolExecutor for cloud GPU (I/O-bound), ProcessPoolExecutor for local CPU (CPU-bound)
-    if config.USE_CLOUD_GPU:
-        executor_class = ThreadPoolExecutor
-        executor_kwargs = {"max_workers": config.MAX_AUDIO_WORKERS_CLOUD_GPU}
-    else:
-        executor_class = ProcessPoolExecutor
-        executor_kwargs = {
-            "max_workers": config.MAX_AUDIO_WORKERS_LOCAL_CPU,
-            "initializer": _worker_init,
-            "initargs": (model_name, device, compute_type, cpu_threads, log_file_path),
-        }
-
-    with executor_class(**executor_kwargs) as executor:
+    # Process ALL files from ALL classes using ThreadPoolExecutor (I/O-bound)
+    with ThreadPoolExecutor(max_workers=config.MAX_AUDIO_WORKERS) as executor:
         futures = {
             executor.submit(transcribe_single_file, args): args
             for args in all_task_args
@@ -648,7 +289,6 @@ def process_all_lectures(classes: List[Path]) -> None:
 
                 except Exception as e:
                     total_failed += 1
-                    # Extract class_name from args
                     class_name = args[3]
                     class_results[class_name]["failed"] += 1
                     logger.error(

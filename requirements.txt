@@ -1,7 +1,4 @@
-faster-whisper
-torch
-torchvision
-torchaudio
+assemblyai
 noisereduce
 soundfile
 librosa
