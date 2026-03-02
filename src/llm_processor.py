@@ -9,6 +9,7 @@ from typing import List, Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import google.generativeai as genai
+from google.api_core.exceptions import NotFound
 from dotenv import load_dotenv
 
 try:
@@ -30,6 +31,19 @@ load_dotenv()
 
 # Initialize logger
 logger = get_logger(__name__)
+
+
+def _check_model_error(e: Exception) -> None:
+    """Raise a friendly SystemExit if the error indicates an invalid or deprecated model."""
+    if isinstance(e, NotFound) or "not found" in str(e).lower():
+        raise SystemExit(
+            f"\nERROR: Gemini model '{config.GEMINI_MODEL}' was not found.\n"
+            f"It may have been updated or deprecated by Google.\n\n"
+            f"To fix this:\n"
+            f"  1. Visit https://ai.google.dev/gemini-api/docs/models to see available models\n"
+            f"  2. Open  src/config.py  and find the GEMINI_MODEL setting\n"
+            f"  3. Replace '{config.GEMINI_MODEL}' with a current model name from the list above\n"
+        )
 
 
 def read_file(filepath: Path) -> Optional[str]:
@@ -99,6 +113,7 @@ def process_with_gemini(
         except Exception as e:
             # Simple exponential backoff for transient failures
             if attempt == max_retries:
+                _check_model_error(e)
                 logger.error(
                     f"Gemini API error after {max_retries} attempts: {e}", exc_info=True
                 )
@@ -175,6 +190,7 @@ def process_pdf_with_gemini(
             return response.text
         except Exception as e:
             if attempt == max_retries:
+                _check_model_error(e)
                 logger.error(
                     f"Gemini API error after {max_retries} attempts: {e}", exc_info=True
                 )
@@ -668,6 +684,7 @@ def process_class_files(
         )
         logger.debug(f"GenerativeModel created successfully")
     except Exception as e:
+        _check_model_error(e)
         logger.error(
             f"Error creating GenerativeModel for {class_name}: {e}", exc_info=True
         )
@@ -793,6 +810,7 @@ def process_all_lectures(classes: List[Path], new_outputs_dir: Path) -> None:
                 ),
             )
         except Exception as e:
+            _check_model_error(e)
             logger.error(f"Error creating model for {class_name}: {e}", exc_info=True)
             continue
 
@@ -954,6 +972,7 @@ def process_all_readings(classes: List[Path], new_outputs_dir: Path) -> None:
                 ),
             )
         except Exception as e:
+            _check_model_error(e)
             logger.error(f"Error creating model for {class_name}: {e}", exc_info=True)
             continue
 
