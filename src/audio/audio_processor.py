@@ -30,7 +30,7 @@ def _transcribe_with_retries(
 ) -> aai.Transcript:
     aai.settings.api_key = config.ASSEMBLYAI_API_KEY
     transcription_config = aai.TranscriptionConfig(
-        speech_model=aai.SpeechModel.best,
+        speech_models=[aai.SpeechModel.slam_1],
         language_code="en",
         speaker_labels=config.ENABLE_DIARIZATION,
         speakers_expected=config.MAX_SPEAKERS,
@@ -222,7 +222,7 @@ def process_all_lectures(classes: List[Path], manifest: RunManifest) -> None:
     Args:
         classes: List of class folder paths
     """
-    logger.info("Using AssemblyAI transcription (Universal-2 model)")
+    logger.info("Using AssemblyAI transcription (Universal-3-Pro model)")
     logger.info(f"Concurrent uploads: {config.MAX_AUDIO_WORKERS}")
     logger.info(f"Speaker diarization: {config.ENABLE_DIARIZATION}")
     manifest.record_stage_event(
