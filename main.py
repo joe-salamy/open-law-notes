@@ -6,7 +6,9 @@ Processes lecture audio and reading text files for multiple classes.
 import sys
 import argparse
 from pathlib import Path
-from src.config import CLASSES, CLASS_PATHS, PARENT_FOLDER, ENABLE_GOOGLE_DRIVE
+from src.config import CLASSES, PARENT_FOLDER, ENABLE_GOOGLE_DRIVE
+
+CLASS_PATHS = [Path(PARENT_FOLDER) / name for name in CLASSES]
 from src.llm.llm_processor import process_all_readings, process_all_lectures
 from src.utils.folder_manager import verify_and_create_folders
 from src.utils.file_mover import setup_output_directory

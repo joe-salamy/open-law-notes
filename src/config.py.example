@@ -39,10 +39,6 @@ CLASSES = {
     "Class 2": None,
 }
 
-# Derived class folder paths — built automatically from PARENT_FOLDER + CLASSES.
-# Do not edit this line.
-CLASS_PATHS = [Path(PARENT_FOLDER) / name for name in CLASSES]
-
 # ========== GOOGLE DRIVE SETTINGS ==========
 
 # Set to False to disable Google Drive entirely.
