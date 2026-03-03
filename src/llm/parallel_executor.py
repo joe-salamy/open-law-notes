@@ -7,16 +7,16 @@ from typing import List, Tuple
 import google.generativeai as genai
 
 try:
-    from . import config
+    from .. import config
     from .file_processors import process_single_file, process_single_pdf, process_single_word
-    from .logger_config import get_logger
+    from ..utils.logger_config import get_logger
 except ImportError:
     import sys
 
-    sys.path.insert(0, str(Path(__file__).parent.parent))
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
     import src.config as config
-    from src.file_processors import process_single_file, process_single_pdf, process_single_word
-    from src.logger_config import get_logger
+    from src.llm.file_processors import process_single_file, process_single_pdf, process_single_word
+    from src.utils.logger_config import get_logger
 
 logger = get_logger(__name__)
 

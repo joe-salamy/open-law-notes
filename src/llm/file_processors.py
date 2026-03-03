@@ -6,18 +6,18 @@ from typing import Optional, Tuple
 import google.generativeai as genai
 
 try:
-    from . import config
-    from .file_mover import move_to_processed, copy_to_new_outputs
-    from .logger_config import get_logger
+    from .. import config
+    from ..utils.file_mover import move_to_processed, copy_to_new_outputs
+    from ..utils.logger_config import get_logger
     from .gemini_client import process_with_gemini, upload_pdf_to_gemini, process_pdf_with_gemini
 except ImportError:
     import sys
 
-    sys.path.insert(0, str(Path(__file__).parent.parent))
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
     import src.config as config
-    from src.file_mover import move_to_processed, copy_to_new_outputs
-    from src.logger_config import get_logger
-    from src.gemini_client import process_with_gemini, upload_pdf_to_gemini, process_pdf_with_gemini
+    from src.utils.file_mover import move_to_processed, copy_to_new_outputs
+    from src.utils.logger_config import get_logger
+    from src.llm.gemini_client import process_with_gemini, upload_pdf_to_gemini, process_pdf_with_gemini
 
 logger = get_logger(__name__)
 

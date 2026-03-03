@@ -8,14 +8,14 @@ import google.generativeai as genai
 from google.api_core.exceptions import NotFound
 
 try:
-    from . import config
-    from .logger_config import get_logger
+    from .. import config
+    from ..utils.logger_config import get_logger
 except ImportError:
     import sys
 
-    sys.path.insert(0, str(Path(__file__).parent.parent))
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
     import src.config as config
-    from src.logger_config import get_logger
+    from src.utils.logger_config import get_logger
 
 logger = get_logger(__name__)
 

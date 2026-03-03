@@ -6,7 +6,7 @@ Ensures each class has the required folder hierarchy.
 import sys
 from pathlib import Path
 from typing import List
-from . import config
+from .. import config
 from .file_mover import setup_output_directory
 from .logger_config import get_logger
 

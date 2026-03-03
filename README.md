@@ -240,6 +240,8 @@ All settings live in `src/config.py` (your local copy of `src/config.py.example`
 
 If `ENABLE_GOOGLE_DRIVE = True`, the pipeline will automatically download new `.m4a` audio files from your Google Drive before processing. Each class can have its own Drive folder.
 
+> **Why use this?** If you record lectures on a phone or another device, uploading the recording to Google Drive and letting the pipeline download it automatically is an easy way to move files over without manually copying them to your computer.
+
 **To set up:**
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com) and create a project

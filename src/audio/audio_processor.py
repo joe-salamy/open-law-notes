@@ -14,10 +14,10 @@ import assemblyai as aai
 import soundfile as sf
 from tqdm import tqdm
 
-from . import config
-from .folder_manager import get_class_paths, get_audio_files
-from .file_mover import move_audio_to_processed
-from .logger_config import get_logger
+from .. import config
+from ..utils.folder_manager import get_class_paths, get_audio_files
+from ..utils.file_mover import move_audio_to_processed
+from ..utils.logger_config import get_logger
 from .audio_helper import (
     preprocess_audio,
     format_transcription_with_speakers,

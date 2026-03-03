@@ -11,9 +11,9 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 
 try:
-    from . import config
-    from .folder_manager import get_class_paths, get_text_files, get_pdf_files, get_word_files
-    from .logger_config import get_logger
+    from .. import config
+    from ..utils.folder_manager import get_class_paths, get_text_files, get_pdf_files, get_word_files
+    from ..utils.logger_config import get_logger
     from .gemini_client import _check_model_error
     from .file_processors import load_system_prompt, process_single_file, process_single_pdf, process_single_word
     from .parallel_executor import (
@@ -24,13 +24,13 @@ try:
 except ImportError:
     import sys
 
-    sys.path.insert(0, str(Path(__file__).parent.parent))
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
     import src.config as config
-    from src.folder_manager import get_class_paths, get_text_files, get_pdf_files, get_word_files
-    from src.logger_config import get_logger
-    from src.gemini_client import _check_model_error
-    from src.file_processors import load_system_prompt, process_single_file, process_single_pdf, process_single_word
-    from src.parallel_executor import (
+    from src.utils.folder_manager import get_class_paths, get_text_files, get_pdf_files, get_word_files
+    from src.utils.logger_config import get_logger
+    from src.llm.gemini_client import _check_model_error
+    from src.llm.file_processors import load_system_prompt, process_single_file, process_single_pdf, process_single_word
+    from src.llm.parallel_executor import (
         execute_parallel_processing,
         execute_parallel_pdf_processing,
         execute_parallel_word_processing,

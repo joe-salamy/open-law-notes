@@ -15,7 +15,7 @@ import librosa
 from scipy import signal
 from pydub import AudioSegment
 
-from .logger_config import get_logger
+from ..utils.logger_config import get_logger
 
 # Initialize logger
 logger = get_logger(__name__)
