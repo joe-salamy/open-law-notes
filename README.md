@@ -36,9 +36,40 @@ By using this tool, you confirm that your use complies with all applicable unive
 ## What It Does
 
 - **Transcribes lecture audio** (.m4a files) using AssemblyAI — with speaker identification so you can tell professor from student
+- **Saves the full transcript** so you can verify the AI's notes against the actual words spoken
 - **Generates structured lecture notes** from transcripts using Google Gemini
 - **Summarizes readings** (PDF, DOCX, TXT, MD) into concise study notes
-- **Copies all outputs** to a single folder for easy access after every run
+- **Copies all new notes** to a single folder for quick one-stop access after every run
+
+---
+
+## How It Works
+
+1. **Drop your lecture recording** into the `lecture-input/` folder inside your class folder
+2. **Drop your reading** (PDF, DOCX, TXT, or MD) into the `reading-input/` folder
+3. **Run `python main.py`**
+4. **Pick up your notes:**
+   - `lecture-output/` — lecture notes for that class
+   - `reading-output/` — reading summaries for that class
+   - `new-outputs-safe-delete/` _(in the project folder)_ — every note generated this run, all in one place for easy grabbing
+
+After processing, your original files are **moved** (not deleted) into `lecture-processed/` and `reading-processed/`. The full lecture transcript is saved to `lecture-processed/txt/` — open it any time to cross-check the AI's notes against what was actually said.
+
+The `new-outputs-safe-delete/` folder is a convenience copy of the latest outputs. Once you've grabbed what you need, you can safely delete its contents — the real notes always live in the class folders.
+
+---
+
+### Accepted audio formats
+
+The tool accepts **M4A files only** (`*.m4a`). This is the default format for the most common recording apps:
+
+| App                               | Platform      | Default format |
+| --------------------------------- | ------------- | -------------- |
+| Voice Memos                       | iPhone / Mac  | M4A ✓          |
+| Voice Recorder / Sound Recorder   | Windows 10/11 | M4A ✓          |
+| Zoom (audio-only local recording) | Windows / Mac | M4A ✓          |
+
+If your recorder saves a different format (MP3, WAV, etc.), convert it to M4A first. Free tools like [Audacity](https://www.audacityteam.org/) or [CloudConvert](https://cloudconvert.com) can do this in a few clicks.
 
 ---
 
@@ -251,19 +282,19 @@ Each class folder gets an `open-law-notes/` subfolder automatically created on t
 ```
 Your Class Folder/
 └── open-law-notes/
-    ├── lecture-input/           ← Drop .m4a files here
-    ├── lecture-output/          ← Generated lecture notes appear here ✓
+    ├── lecture-input/           ← DROP .m4a recordings here before running
+    ├── lecture-output/          ← Lecture notes appear here after running ✓
     ├── lecture-processed/
-    │   ├── audio/               ← Original .m4a files moved here after processing
-    │   └── txt/                 ← Raw transcripts saved here
-    ├── reading-input/           ← Drop PDFs, DOCX, TXT, MD files here
-    ├── reading-output/          ← Generated reading notes appear here ✓
-    └── reading-processed/       ← Original reading files moved here after processing
+    │   ├── audio/               ← Original .m4a moved here after processing (preserved)
+    │   └── txt/                 ← Full transcripts saved here — open to verify AI notes
+    ├── reading-input/           ← DROP PDFs, DOCX, TXT, MD files here before running
+    ├── reading-output/          ← Reading summaries appear here after running ✓
+    └── reading-processed/       ← Original reading files moved here after processing (preserved)
 ```
 
-Files are **moved** (not deleted) into the processed folders after each run, so your original recordings and readings are always preserved.
+Files are **moved** (not deleted) into the processed folders after each run, so your originals are always safe.
 
-A copy of every note is also placed in `new-outputs-safe-delete/` in the project folder for quick access.
+Every output is also copied to `new-outputs-safe-delete/` in the project root — a single folder with everything generated on the latest run. Grab what you need, then delete the contents whenever you like. The real notes live in the class folders above.
 
 ---
 
@@ -293,6 +324,19 @@ python main.py
 ```
 python main.py --read-only
 ```
+
+---
+
+## Estimated Costs
+
+Both APIs have free tiers, but charges apply once you exceed them. Rough estimates:
+
+| What                            | Estimated cost                |
+| ------------------------------- | ----------------------------- |
+| Lecture (transcription + notes) | ~$0.30 per hour of audio      |
+| Reading summary                 | ~$0.15 per reading assignment |
+
+Costs come from AssemblyAI (transcription) and Google Gemini (note generation). Both offer free monthly credits that will cover light usage before any charges kick in.
 
 ---
 
