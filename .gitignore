@@ -56,4 +56,4 @@ new-outputs-safe-delete/
 scratchpad.md
 
 # Local config (copy of config.py.example with your personal paths)
-src/config.py
+config.py

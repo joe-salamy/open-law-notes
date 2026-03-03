@@ -6,15 +6,15 @@ from typing import List, Tuple
 
 import google.generativeai as genai
 
+import config
+
 try:
-    from .. import config
     from .file_processors import process_single_file, process_single_pdf, process_single_word
     from ..utils.logger_config import get_logger
 except ImportError:
     import sys
 
     sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-    import src.config as config
     from src.llm.file_processors import process_single_file, process_single_pdf, process_single_word
     from src.utils.logger_config import get_logger
 

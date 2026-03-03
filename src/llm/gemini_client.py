@@ -7,14 +7,14 @@ from typing import Optional
 import google.generativeai as genai
 from google.api_core.exceptions import NotFound
 
+import config
+
 try:
-    from .. import config
     from ..utils.logger_config import get_logger
 except ImportError:
     import sys
 
     sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-    import src.config as config
     from src.utils.logger_config import get_logger
 
 logger = get_logger(__name__)
@@ -28,7 +28,7 @@ def _check_model_error(e: Exception) -> None:
             f"It may have been updated or deprecated by Google.\n\n"
             f"To fix this:\n"
             f"  1. Visit https://ai.google.dev/gemini-api/docs/models to see available models\n"
-            f"  2. Open  src/config.py  and find the GEMINI_MODEL setting\n"
+            f"  2. Open  config.py  and find the GEMINI_MODEL setting\n"
             f"  3. Replace '{config.GEMINI_MODEL}' with a current model name from the list above\n"
         )
 

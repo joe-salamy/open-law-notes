@@ -36,49 +36,115 @@ By using this tool, you confirm that all recordings were made with appropriate p
 
 Download Python 3.10 or newer from [python.org](https://www.python.org/downloads/). During installation, check **"Add Python to PATH"**.
 
-Verify it worked:
+**Verify it worked** — you'll do this in a terminal.
 
-**Windows**
+> **What is a terminal?** It's a plain text window where you type commands and press Enter to run them.
+> - **Windows:** Press the **Start** button, type **Command Prompt**, and press Enter.
+> - **Mac:** Press **Command + Space**, type **Terminal**, and press Enter.
+
+Type the command for your system into the terminal and press Enter:
+
+**Windows:**
 
 ```
 python --version
 ```
 
-**Mac**
+**Mac:**
 
 ```
 python3 --version
 ```
 
+You should see something like `Python 3.12.0`. If you get an error instead, Python was not installed correctly — re-run the installer and make sure to check **"Add Python to PATH"** before clicking Install.
+
 ### Step 2 — Install FFmpeg
 
 FFmpeg converts your .m4a recordings to the format AssemblyAI expects. You only need to do this once.
 
-**Windows** — Install with [Chocolatey](https://chocolatey.org/install) (run in Administrator PowerShell):
+**Windows** — Install with [Chocolatey](https://chocolatey.org/install). Once Chocolatey is installed, open an **Administrator PowerShell** (press Start, type **PowerShell**, right-click it, and choose **"Run as administrator"**), then run:
 
 ```
 choco install ffmpeg
 ```
 
-**Mac** — Install with [Homebrew](https://brew.sh):
+**Mac** — Install with [Homebrew](https://brew.sh). Once Homebrew is installed, open Terminal and run:
 
 ```
 brew install ffmpeg
 ```
 
-Verify: `ffmpeg -version`
+**Verify it worked** — in your terminal (Command Prompt on Windows, Terminal on Mac), run:
+
+```
+ffmpeg -version
+```
+
+You should see a version number printed out. If you get an error, restart your terminal and try the install step again.
 
 ### Step 3 — Install OpenLawNotes
 
-Download or clone this repo, then open a terminal in the project folder and run:
+**Download the project.** Click the green **Code** button on this GitHub page and choose **Download ZIP**. Unzip it somewhere easy to find — like your Desktop or Documents folder. Note the full path to the folder (you'll need it in a moment).
 
-**Windows**
+**Open a terminal and navigate to the project folder.**
+
+> **What does "navigate" mean?** You use the `cd` command (short for "change directory") to tell the terminal which folder to work in. You only need to do this once per session.
+
+**Windows** — open Command Prompt and run (replace the path with wherever you unzipped the project):
+
+```
+cd C:\Users\YourName\Desktop\smart-law-notes
+```
+
+**Mac** — open Terminal and run:
+
+```
+cd /Users/YourName/Desktop/smart-law-notes
+```
+
+> **Tip:** The easiest way to get the right path is to open the folder in File Explorer (Windows) or Finder (Mac), then copy the address from the address bar. On Windows you can also type `cmd` directly into the File Explorer address bar to open a terminal already in that folder.
+
+**Create a virtual environment.** This keeps OpenLawNotes's packages separate from anything else on your computer. Run this once, from inside the project folder:
+
+**Windows:**
+
+```
+python -m venv venv
+```
+
+**Mac:**
+
+```
+python3 -m venv venv
+```
+
+**Activate the virtual environment.** You must do this every time you open a new terminal before running the tool:
+
+**Windows:**
+
+```
+venv\Scripts\activate
+```
+
+**Mac:**
+
+```
+source venv/bin/activate
+```
+
+Your terminal prompt will change to show `(venv)` at the start — that means it worked.
+
+> **Every time you want to run OpenLawNotes:** open a terminal, `cd` to the project folder, then activate the venv. The `QUICKSTART.md` file in this project has all three commands in one place for easy copy-paste.
+
+**Install the required packages** (only needed once, after activating the venv):
+
+**Windows:**
 
 ```
 pip install -r requirements.txt
 ```
 
-**Mac**
+**Mac:**
 
 ```
 pip3 install -r requirements.txt
@@ -126,16 +192,16 @@ ASSEMBLYAI_API_KEY=paste-your-assemblyai-key-here
 **Windows**
 
 ```
-copy src\config.py.example src\config.py
+copy config.py.example config.py
 ```
 
 **Mac**
 
 ```
-cp src/config.py.example src/config.py
+cp config.py.example config.py
 ```
 
-**Open `src/config.py` and set your `PARENT_FOLDER`** — the folder that contains all your class folders:
+**Open `config.py` and set your `PARENT_FOLDER`** — the folder that contains all your class folders:
 
 ```python
 PARENT_FOLDER = "C:/Users/YourName/Documents/Law school"
@@ -190,7 +256,7 @@ A copy of every note is also placed in `new-outputs-safe-delete/` in the project
 
 ## Updating for a New Semester
 
-Open `src/config.py` and update the `CLASSES` dict to your new class names. That's it — the folder structure is auto-created fresh for each new entry.
+Open `config.py` and update the `CLASSES` dict to your new class names. That's it — the folder structure is auto-created fresh for each new entry.
 
 ```python
 CLASSES = {
@@ -219,7 +285,7 @@ python main.py --read-only
 
 ## Configuration Reference
 
-All settings live in `src/config.py` (your local copy of `src/config.py.example`).
+All settings live in `config.py` (your local copy of `config.py.example`).
 
 | Setting               | Default                   | Description                                             |
 | --------------------- | ------------------------- | ------------------------------------------------------- |
@@ -254,7 +320,7 @@ If `ENABLE_GOOGLE_DRIVE = True`, the pipeline will automatically download new `.
      https://drive.google.com/drive/folders/1aBcDeFgHiJkLmNoPqRsTuV
      ```
    - The long string of letters and numbers at the end **is the folder ID**. Copy it.
-5. Paste each ID into `src/config.py` next to the class name:
+5. Paste each ID into `config.py` next to the class name:
    ```python
    CLASSES = {
        "Contracts": "1aBcDeFgHiJkLmNoPqRsTuV",   # Drive folder ID
@@ -265,7 +331,7 @@ If `ENABLE_GOOGLE_DRIVE = True`, the pipeline will automatically download new `.
 
 On first run, a browser window will open to authorize access. After that, auth is saved automatically.
 
-**If you don't use Google Drive**, set `ENABLE_GOOGLE_DRIVE = False` in `src/config.py` and skip this section entirely. Just drop files into the input folders manually.
+**If you don't use Google Drive**, set `ENABLE_GOOGLE_DRIVE = False` in `config.py` and skip this section entirely. Just drop files into the input folders manually.
 
 ---
 

@@ -10,8 +10,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import google.generativeai as genai
 from dotenv import load_dotenv
 
+import config
+
 try:
-    from .. import config
     from ..utils.folder_manager import get_class_paths, get_text_files, get_pdf_files, get_word_files
     from ..utils.logger_config import get_logger
     from .gemini_client import _check_model_error
@@ -25,7 +26,6 @@ except ImportError:
     import sys
 
     sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-    import src.config as config
     from src.utils.folder_manager import get_class_paths, get_text_files, get_pdf_files, get_word_files
     from src.utils.logger_config import get_logger
     from src.llm.gemini_client import _check_model_error
