@@ -19,6 +19,18 @@ This tool processes audio recordings of lectures. Before recording any class ses
 This project takes no responsibility for recordings made without proper authorization.
 By using this tool, you confirm that all recordings were made with appropriate permission.
 
+## ⚠️ University AI Policy
+
+This tool uses AI services (AssemblyAI and Google Gemini) to process lecture content and generate notes. Before using this tool:
+
+- **Always check your university's AI use policy** before using AI-generated content for academic work
+- Many institutions restrict or prohibit the use of AI tools for coursework — ensure your use complies with your school's rules
+- AI-generated notes are a study aid; review them critically and supplement with your own understanding
+- Some courses or exams may prohibit the use of AI-assisted materials entirely
+
+This project takes no responsibility for any violations of your institution's academic integrity or AI use policies.
+By using this tool, you confirm that your use complies with all applicable university policies.
+
 ---
 
 ## What It Does
