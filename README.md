@@ -358,3 +358,7 @@ Make sure you dropped files into the correct input folder: `open-law-notes/lectu
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Architecture
+
+- System architecture and data flow: [docs/architecture.md](docs/architecture.md)

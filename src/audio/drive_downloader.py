@@ -5,14 +5,16 @@ Downloads m4a files from Google Drive and moves them to local lecture-input fold
 
 import io
 from pathlib import Path
+from pickle import UnpicklingError
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+from googleapiclient.errors import HttpError
 import pickle
 
-from ..config import LECTURE_INPUT, LLM_BASE
+import config
 from ..utils.logger_config import get_logger
 
 logger = get_logger(__name__)
@@ -21,8 +23,9 @@ logger = get_logger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 # Token and credentials file paths
-TOKEN_FILE = Path(__file__).parent.parent / "token.pickle"
-CREDENTIALS_FILE = Path(__file__).parent.parent / "credentials.json"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+TOKEN_FILE = PROJECT_ROOT / "token.pickle"
+CREDENTIALS_FILE = PROJECT_ROOT / "credentials.json"
 
 
 def get_drive_service():
@@ -34,8 +37,12 @@ def get_drive_service():
 
     # Load existing token if available
     if TOKEN_FILE.exists():
-        with open(TOKEN_FILE, "rb") as token:
-            creds = pickle.load(token)
+        try:
+            with open(TOKEN_FILE, "rb") as token:
+                creds = pickle.load(token)
+        except (OSError, UnpicklingError) as exc:
+            logger.warning(f"Invalid token file {TOKEN_FILE}, re-auth required: {exc}")
+            creds = None
 
     # Refresh or get new credentials if needed
     if not creds or not creds.valid:
@@ -158,7 +165,7 @@ def download_file(service, file_id: str, destination_path: Path) -> bool:
                 f.write(fh.getvalue())
 
         return True
-    except Exception as e:
+    except (HttpError, OSError, ValueError) as e:
         logger.error(f"Error downloading file: {e}")
         return False
 
@@ -183,7 +190,7 @@ def move_file_to_folder(service, file_id: str, new_folder_id: str) -> bool:
         ).execute()
 
         return True
-    except Exception as e:
+    except (HttpError, ValueError) as e:
         logger.error(f"Error moving file in Drive: {e}")
         return False
 
@@ -206,12 +213,10 @@ def download_class_files(service, class_folder: Path, drive_folder_id: str) -> i
     logger.info(f"Found {len(m4a_files)} m4a file(s) to download")
 
     # Get or create the Processed folder in Drive
-    processed_folder_id = find_or_create_processed_folder(
-        service, drive_folder_id
-    )
+    processed_folder_id = find_or_create_processed_folder(service, drive_folder_id)
 
     # Local destination folder
-    local_destination = class_folder / LLM_BASE / LECTURE_INPUT
+    local_destination = class_folder / config.LLM_BASE / config.LECTURE_INPUT
     local_destination.mkdir(parents=True, exist_ok=True)
 
     downloaded_count = 0
@@ -262,7 +267,7 @@ def download_from_drive(classes: dict, parent_folder: Path) -> dict[str, int]:
     except FileNotFoundError as e:
         logger.error(str(e))
         raise
-    except Exception as e:
+    except (HttpError, OSError, ValueError) as e:
         logger.error(f"Failed to connect to Google Drive: {e}")
         raise
 

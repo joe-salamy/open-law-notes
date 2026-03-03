@@ -7,22 +7,21 @@ from typing import List, Tuple
 import google.generativeai as genai
 
 import config
-
-try:
-    from .file_processors import process_single_file, process_single_pdf, process_single_word
-    from ..utils.logger_config import get_logger
-except ImportError:
-    import sys
-
-    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-    from src.llm.file_processors import process_single_file, process_single_pdf, process_single_word
-    from src.utils.logger_config import get_logger
+from ..utils.logger_config import get_logger
+from ..utils.run_manifest import RunManifest
+from .file_processors import (
+    process_single_file,
+    process_single_pdf,
+    process_single_word,
+)
 
 logger = get_logger(__name__)
 
 
 def execute_parallel_processing(
-    task_args: List[Tuple[Path, genai.GenerativeModel, Path, Path, Path, bool]],
+    task_args: List[
+        Tuple[Path, genai.GenerativeModel, Path, Path, Path, bool, str, RunManifest]
+    ],
     total_files: int,
 ) -> Tuple[int, int]:
     """Execute parallel processing of text files. Returns (successful, failed)."""
@@ -55,7 +54,7 @@ def execute_parallel_processing(
                     )
                     logger.error(f"Failed to process {original_file.name}: {message}")
 
-            except Exception as e:
+            except (RuntimeError, OSError, ValueError, TypeError) as e:
                 failed += 1
                 logger.error(
                     f"Unexpected error processing {input_file.name}: {e}", exc_info=True
@@ -71,7 +70,9 @@ def execute_parallel_processing(
 
 
 def execute_parallel_pdf_processing(
-    task_args: List[Tuple[Path, genai.GenerativeModel, Path, Path, Path]],
+    task_args: List[
+        Tuple[Path, genai.GenerativeModel, Path, Path, Path, str, str, RunManifest]
+    ],
     total_files: int,
 ) -> Tuple[int, int]:
     """Execute parallel processing of PDF files. Returns (successful, failed)."""
@@ -106,7 +107,7 @@ def execute_parallel_pdf_processing(
                         f"Failed to process PDF {original_file.name}: {message}"
                     )
 
-            except Exception as e:
+            except (RuntimeError, OSError, ValueError, TypeError) as e:
                 failed += 1
                 logger.error(
                     f"Unexpected error processing PDF {input_file.name}: {e}",
@@ -123,7 +124,9 @@ def execute_parallel_pdf_processing(
 
 
 def execute_parallel_word_processing(
-    task_args: List[Tuple[Path, genai.GenerativeModel, Path, Path, Path]],
+    task_args: List[
+        Tuple[Path, genai.GenerativeModel, Path, Path, Path, str, str, RunManifest]
+    ],
     total_files: int,
 ) -> Tuple[int, int]:
     """Execute parallel processing of Word files. Returns (successful, failed)."""
@@ -160,7 +163,7 @@ def execute_parallel_word_processing(
                         f"Failed to process Word file {original_file.name}: {message}"
                     )
 
-            except Exception as e:
+            except (RuntimeError, OSError, ValueError, TypeError) as e:
                 failed += 1
                 logger.error(
                     f"Unexpected error processing Word file {input_file.name}: {e}",
