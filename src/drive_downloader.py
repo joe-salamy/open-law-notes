@@ -12,7 +12,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 import pickle
 
-from .config import LECTURE_INPUT, LLM_BASE, DRIVE_PARENT_FOLDER_ID
+from .config import LECTURE_INPUT, LLM_BASE
 from .logger_config import get_logger
 
 logger = get_logger(__name__)
@@ -188,7 +188,7 @@ def move_file_to_folder(service, file_id: str, new_folder_id: str) -> bool:
         return False
 
 
-def download_class_files(service, class_folder: Path) -> int:
+def download_class_files(service, class_folder: Path, drive_folder_id: str) -> int:
     """
     Download all m4a files for a single class from Google Drive.
     Returns the number of files downloaded.
@@ -196,19 +196,8 @@ def download_class_files(service, class_folder: Path) -> int:
     class_name = class_folder.name
     logger.info(f"Processing class: {class_name}")
 
-    # Find the class folder in Drive
-    class_drive_folder_id = find_folder_by_name(
-        service, DRIVE_PARENT_FOLDER_ID, class_name
-    )
-
-    if not class_drive_folder_id:
-        logger.warning(f"No folder found in Drive for class: {class_name}")
-        return 0
-
-    logger.debug(f"Found Drive folder for {class_name}: {class_drive_folder_id}")
-
-    # Get m4a files in the class folder
-    m4a_files = get_m4a_files(service, class_drive_folder_id)
+    # Get m4a files in the class Drive folder
+    m4a_files = get_m4a_files(service, drive_folder_id)
 
     if not m4a_files:
         logger.info(f"No m4a files found for {class_name}")
@@ -218,7 +207,7 @@ def download_class_files(service, class_folder: Path) -> int:
 
     # Get or create the Processed folder in Drive
     processed_folder_id = find_or_create_processed_folder(
-        service, class_drive_folder_id
+        service, drive_folder_id
     )
 
     # Local destination folder
@@ -254,12 +243,13 @@ def download_class_files(service, class_folder: Path) -> int:
     return downloaded_count
 
 
-def download_from_drive(classes: list[Path]) -> dict[str, int]:
+def download_from_drive(classes: dict, parent_folder: Path) -> dict[str, int]:
     """
-    Download m4a files from Google Drive for all classes.
+    Download m4a files from Google Drive for all classes that have a Drive folder ID.
 
     Args:
-        classes: List of class folder paths
+        classes: Dict mapping class name to Drive folder ID (or None to skip)
+        parent_folder: Local parent folder containing all class subfolders
 
     Returns:
         Dictionary mapping class names to number of files downloaded
@@ -279,9 +269,15 @@ def download_from_drive(classes: list[Path]) -> dict[str, int]:
     results = {}
     total_downloaded = 0
 
-    for class_folder in classes:
-        class_name = class_folder.name
-        count = download_class_files(service, class_folder)
+    for class_name, drive_id in classes.items():
+        if not drive_id:
+            logger.info(f"Skipping {class_name}: no Drive folder ID configured")
+            results[class_name] = 0
+            logger.info("─" * 70)
+            continue
+
+        class_folder = parent_folder / class_name
+        count = download_class_files(service, class_folder, drive_id)
         results[class_name] = count
         total_downloaded += count
         logger.info("─" * 70)

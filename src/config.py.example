@@ -12,33 +12,42 @@ load_dotenv()
 
 # ========== EDIT THESE PATHS ==========
 
-# List your class folders here — one Path(...) line per class.
+# The folder containing ALL your class folders. Set this once.
 #
-# Each path should point to the ROOT folder for that class
-# (not the open-law-notes/ subfolder — that is created automatically).
+# How to find your path:
+#   Windows: Open File Explorer, navigate into your law school folder,
+#            click the address bar at the top, and copy the full path shown.
+#            Example: "C:/Users/YourName/Documents/Law school"  ← use forward slashes
+#   Mac:     Open Finder, navigate to your law school folder,
+#            right-click it while holding the Option key, then click
+#            "Copy [folder name] as Pathname".
+#            Example: "/Users/YourName/Documents/Law school"
+PARENT_FOLDER = "C:/Users/YourName/Documents/Law school"
+
+# Your classes.
 #
-# To add a class:    add a new Path(...) line
-# To remove a class: comment out or delete the line
-# New semester:      update this list to your new classes
+# Format:
+#   "Folder Name": None               — no Google Drive sync for this class
+#   "Folder Name": "drive-id-here"    — sync audio from Google Drive
 #
-# Example (Windows):
-#   Path("C:/Users/YourName/Documents/Law school/Contracts"),
-# Example (Mac):
-#   Path("/Users/YourName/Documents/Law school/Contracts"),
-CLASSES = [
-    Path("C:/Users/YourName/Documents/Law school/Class 1"),
-    Path("C:/Users/YourName/Documents/Law school/Class 2"),
-]
+# The folder name must exactly match the folder name on your computer.
+# To add a class:  add a new line
+# To remove one:   delete or comment it out
+# New semester:    update this list to your new classes
+CLASSES = {
+    "Class 1": None,
+    "Class 2": None,
+}
+
+# Derived class folder paths — built automatically from PARENT_FOLDER + CLASSES.
+# Do not edit this line.
+CLASS_PATHS = [Path(PARENT_FOLDER) / name for name in CLASSES]
 
 # ========== GOOGLE DRIVE SETTINGS ==========
 
-# Set to False if you don't use Google Drive
-# (you'll drop files manually into the input folders instead)
+# Set to False to disable Google Drive entirely.
+# Even if True, only classes with a Drive folder ID in CLASSES above will sync.
 ENABLE_GOOGLE_DRIVE = True
-
-# Parent folder ID in Google Drive containing your class subfolders.
-# See the README for instructions on finding your folder ID.
-DRIVE_PARENT_FOLDER_ID = "your-google-drive-folder-id-here"
 
 # ========== ASSEMBLYAI SETTINGS ==========
 

@@ -6,7 +6,7 @@ Processes lecture audio and reading text files for multiple classes.
 import sys
 import argparse
 from pathlib import Path
-from src.config import CLASSES, ENABLE_GOOGLE_DRIVE
+from src.config import CLASSES, CLASS_PATHS, PARENT_FOLDER, ENABLE_GOOGLE_DRIVE
 from src.llm_processor import process_all_readings, process_all_lectures
 from src.folder_manager import verify_and_create_folders
 from src.file_mover import setup_output_directory
@@ -40,7 +40,7 @@ def main():
     logger.info("=" * 70)
     if reading_only_mode:
         logger.info("*** READING-ONLY MODE ENABLED ***")
-    logger.debug(f"Processing {len(CLASSES)} classes")
+    logger.debug(f"Processing {len(CLASS_PATHS)} classes")
 
     # Setup new-outputs-safe-delete directory
     try:
@@ -60,7 +60,7 @@ def main():
 
         try:
             logger.debug("Starting Google Drive download")
-            download_results = download_from_drive(CLASSES)
+            download_results = download_from_drive(CLASSES, Path(PARENT_FOLDER))
             total_files = sum(download_results.values())
             logger.info(f"✓ Downloaded {total_files} file(s) from Google Drive")
             for class_name, count in download_results.items():
@@ -84,8 +84,8 @@ def main():
     logger.info("STEP 1: Verifying Folder Structure")
     logger.info("=" * 70)
 
-    for class_folder in CLASSES:
-        class_name = Path(class_folder).name
+    for class_folder in CLASS_PATHS:
+        class_name = class_folder.name
         logger.info(f"Verifying: {class_name}")
         logger.debug(f"Class folder path: {class_folder}")
         try:
@@ -104,7 +104,7 @@ def main():
 
         try:
             logger.debug("Starting audio processing")
-            process_audio(CLASSES)
+            process_audio(CLASS_PATHS)
             logger.debug("Audio processing completed")
         except Exception as e:
             logger.error(f"✗ Error processing lectures: {e}", exc_info=True)
@@ -122,7 +122,7 @@ def main():
 
         try:
             logger.debug("Starting lecture transcript processing")
-            process_all_lectures(CLASSES, output_dir)
+            process_all_lectures(CLASS_PATHS, output_dir)
             logger.debug("Lecture transcript processing completed")
         except Exception as e:
             logger.error(f"✗ Error processing lecture transcripts: {e}", exc_info=True)
@@ -139,7 +139,7 @@ def main():
 
     try:
         logger.debug("Starting reading processing")
-        process_all_readings(CLASSES, output_dir)
+        process_all_readings(CLASS_PATHS, output_dir)
         logger.debug("Reading processing completed")
     except Exception as e:
         logger.error(f"✗ Error processing readings: {e}", exc_info=True)

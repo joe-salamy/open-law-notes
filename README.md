@@ -135,16 +135,27 @@ copy src\config.py.example src\config.py
 cp src/config.py.example src/config.py
 ```
 
-**Open `src/config.py` and update the `CLASSES` list** to point to your class folders:
+**Open `src/config.py` and set your `PARENT_FOLDER`** — the folder that contains all your class folders:
 
 ```python
-CLASSES = [
-    Path("C:/Users/YourName/Documents/Law school/Contracts"),
-    Path("C:/Users/YourName/Documents/Law school/Civ Pro"),
-]
+PARENT_FOLDER = "C:/Users/YourName/Documents/Law school"
 ```
 
-That's it. Run the pipeline:
+**How to find this path:**
+
+- **Windows** — Right-click your law school folder in File Explorer and click **Copy address**. This gives you something like `C:\Users\YourName\Documents\Law school`. When pasting into `config.py`, replace each `\` with `/` (forward slash) — for example: `"C:/Users/YourName/Documents/Law school"`. Forward slashes always work on Windows in Python.
+- **Mac** — Open Finder and navigate to your law school folder. Right-click (or Ctrl-click) it while holding the **Option** key, then click **"Copy [folder name] as Pathname"**.
+
+**Then list your classes:**
+
+```python
+CLASSES = {
+    "Contracts": None,
+    "Civ Pro":   None,
+}
+```
+
+Each name must exactly match the folder name on your computer. That's it. Run the pipeline:
 
 ```
 python main.py
@@ -179,13 +190,13 @@ A copy of every note is also placed in `new-outputs-safe-delete/` in the project
 
 ## Updating for a New Semester
 
-Open `src/config.py` and update the `CLASSES` list to your new class folders. That's it — the folder structure is auto-created fresh for each new path.
+Open `src/config.py` and update the `CLASSES` dict to your new class names. That's it — the folder structure is auto-created fresh for each new entry.
 
 ```python
-CLASSES = [
-    Path("C:/Users/YourName/Documents/Law school/Contracts"),
-    Path("C:/Users/YourName/Documents/Law school/Civ Pro"),
-]
+CLASSES = {
+    "Contracts": None,
+    "Civ Pro":   None,
+}
 ```
 
 ---
@@ -212,7 +223,8 @@ All settings live in `src/config.py` (your local copy of `src/config.py.example`
 
 | Setting               | Default                   | Description                                             |
 | --------------------- | ------------------------- | ------------------------------------------------------- |
-| `CLASSES`             | _(your paths)_            | List of class root folders to process                   |
+| `PARENT_FOLDER`       | _(your path)_             | Path to the folder containing all your class folders    |
+| `CLASSES`             | _(your classes)_          | Dict of class names → Drive folder ID (or `None`)       |
 | `ENABLE_GOOGLE_DRIVE` | `True`                    | Set `False` to skip Google Drive download (Step 0)      |
 | `ENABLE_DIARIZATION`  | `True`                    | Identify speakers in transcripts                        |
 | `MAX_SPEAKERS`        | `None`                    | Speaker count hint for diarization (None = auto)        |
@@ -226,17 +238,27 @@ All settings live in `src/config.py` (your local copy of `src/config.py.example`
 
 ## Google Drive Setup (Optional)
 
-If `ENABLE_GOOGLE_DRIVE = True`, the pipeline will automatically download new audio files from your Google Drive before processing.
+If `ENABLE_GOOGLE_DRIVE = True`, the pipeline will automatically download new `.m4a` audio files from your Google Drive before processing. Each class can have its own Drive folder.
 
 **To set up:**
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com) and create a project
 2. Enable the **Google Drive API**
 3. Create OAuth 2.0 credentials (Desktop app), download the JSON, and save it as `credentials.json` in the project root
-4. Find your Drive folder ID: open the folder in Google Drive and copy the ID from the URL — it looks like `https://drive.google.com/drive/folders/THIS_PART_IS_THE_ID`
-5. Paste it into `src/config.py`:
+4. For each class you want to sync, find its Drive folder ID:
+   - Open the class folder in Google Drive in your browser
+   - Look at the URL — it will look like:
+     ```
+     https://drive.google.com/drive/folders/1aBcDeFgHiJkLmNoPqRsTuV
+     ```
+   - The long string of letters and numbers at the end **is the folder ID**. Copy it.
+5. Paste each ID into `src/config.py` next to the class name:
    ```python
-   DRIVE_PARENT_FOLDER_ID = "your-folder-id-here"
+   CLASSES = {
+       "Contracts": "1aBcDeFgHiJkLmNoPqRsTuV",   # Drive folder ID
+       "Torts":     "2xYzAbCdEfGhIjKlMnOpQr",    # Drive folder ID
+       "Civ Pro":   None,                          # no Drive sync
+   }
    ```
 
 On first run, a browser window will open to authorize access. After that, auth is saved automatically.
@@ -254,7 +276,7 @@ Your `.env` file is missing or the key isn't set. Open `.env` and make sure the 
 FFmpeg isn't installed or isn't on your PATH. Re-run the FFmpeg install step and restart your terminal.
 
 **`Class folder does not exist`**
-The path in your `CLASSES` list doesn't match a real folder. Check for typos — Windows paths can use backslashes (`\`) or forward slashes (`/`), both work in Python.
+The class name in your `CLASSES` dict doesn't match a real folder inside `PARENT_FOLDER`. Check for typos — the name must match exactly, including capitalization and spaces.
 
 **Gemini API errors / model not available**
 The model name in `GEMINI_MODEL` may be unavailable in your region or account tier. Try changing it to `gemini-1.5-pro` as a fallback.
