@@ -39,6 +39,7 @@ Download Python 3.10 or newer from [python.org](https://www.python.org/downloads
 **Verify it worked** — you'll do this in a terminal.
 
 > **What is a terminal?** It's a plain text window where you type commands and press Enter to run them.
+>
 > - **Windows:** Press the **Start** button, type **Command Prompt**, and press Enter.
 > - **Mac:** Press **Command + Space**, type **Terminal**, and press Enter.
 
