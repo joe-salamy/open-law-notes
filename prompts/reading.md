@@ -20,13 +20,16 @@
 
 You must identify and perform a full analysis for **every single legal case** mentioned, cited, or discussed in the text, including those found in the notes and questions following a main case. Do not omit any cases. Use this structure for each identified case:
 
-- **Case Name**: Include jurisdiction and year (if available).
-  - **Facts**: Each sentence must be a separate bullet point.
-  - **Procedural History**: Each sentence must be a separate bullet point.
-  - **Issue**: The core legal question.
-  - **Holding**: The court's decision.
-  - **Reasoning**: The logic used.
-  - **Disposition**: The final order (e.g., Affirmed).
+- **Case Name**: _[Case Name]_, [Court] ([Year if available])
+  - **Facts**:
+    - [Each sentence of the factual background as a separate bullet point.]
+  - **Procedural History**:
+    - [Each sentence of the procedural history as a separate bullet point. **Bold** key legal terms and procedural steps (e.g., **writ of certiorari**, **injunction**, **bill in equity**).]
+  - **Issue**: [State as a single yes/no legal question, **bolding** the key legal concept at stake.]
+  - **Holding**: [Yes or No.] [State the court's precise holding, **bolding** the dispositive legal doctrine.]
+  - **Reasoning**:
+    - [Each line of the court's reasoning as a separate bullet point. **Bold** key legal concepts, doctrines, and terms throughout.]
+  - **Disposition**: [The final order, e.g., _Affirmed_, _Reversed_, _Remanded_.]
 
 Exclude any case brief components above not explicitly mentioned in the source text. Integrate each case brief immediately following its mention or analysis within the primary notes. Do not aggregate them into a separate appendix or concluding section.
 

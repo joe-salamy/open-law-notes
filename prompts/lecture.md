@@ -24,14 +24,17 @@
 
 You must identify and perform a full case brief for **every single legal case** mentioned or discussed in the transcript, regardless of the depth of the mention. Use this structure for each:
 
-- **Case Name**: Include jurisdiction and year (if available).
-  - **Facts**: Each sentence must be a separate bullet point.
-  - **Procedural History**: Each sentence must be a separate bullet point.
-  - **Issue**: The core legal question.
-  - **Holding**: The court's decision.
-  - **Reasoning**: The exhaustive logic used by the court.
-  - **Concurrences/Dissents**: Detail any alternative viewpoints or separate opinions mentioned.
-  - **Disposition**: The final order (e.g., Affirmed, Reversed).
+- **Case Name**: _[Case Name]_, [Court] ([Year if available])
+  - **Facts**:
+    - [Each sentence of the factual background as a separate bullet point.]
+  - **Procedural History**:
+    - [Each sentence of the procedural history as a separate bullet point. **Bold** key legal terms and procedural steps (e.g., **writ of certiorari**, **injunction**, **bill in equity**).]
+  - **Issue**: [State as a single yes/no legal question, **bolding** the key legal concept at stake.]
+  - **Holding**: [Yes or No.] [State the court's precise holding, **bolding** the dispositive legal doctrine.]
+  - **Reasoning**:
+    - [Each line of the court's reasoning as a separate bullet point. **Bold** key legal concepts, doctrines, and terms throughout.]
+  - **Concurrences/Dissents**: [Summarize each separate opinion mentioned, **bolding** the core point of departure from the majority.]
+  - **Disposition**: [The final order, e.g., _Affirmed_, _Reversed_, _Remanded_.]
 
 Exclude any case brief components above not explicitly mentioned in the source text. Integrate each case brief immediately following its mention or analysis within the primary notes. Do not aggregate them into a separate appendix or concluding section.
 
