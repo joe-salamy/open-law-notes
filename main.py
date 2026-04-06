@@ -5,10 +5,10 @@ Processes lecture audio and reading text files for multiple classes.
 
 import sys
 import argparse
+from collections.abc import Callable
 from pathlib import Path
-from config import CLASSES, PARENT_FOLDER, ENABLE_GOOGLE_DRIVE
 
-CLASS_PATHS = [Path(PARENT_FOLDER) / name for name in CLASSES]
+from config import CLASSES, PARENT_FOLDER, ENABLE_GOOGLE_DRIVE
 from src.llm.llm_processor import process_all_readings, process_all_lectures
 from src.utils.folder_manager import verify_and_create_folders
 from src.utils.file_mover import setup_output_directory
@@ -20,8 +20,34 @@ from src.utils.logger_config import setup_logging, get_logger
 # Initialize logger
 logger = get_logger(__name__)
 
+BANNER_WIDTH = 70
 
-def main():
+
+def _log_banner(title: str) -> None:
+    logger.info("=" * BANNER_WIDTH)
+    logger.info(title)
+    logger.info("=" * BANNER_WIDTH)
+
+
+def _run_stage(
+    manifest: RunManifest,
+    stage_name: str,
+    label: str,
+    step: int,
+    fn: Callable[[], None],
+) -> None:
+    """Run a pipeline stage with standard logging and error handling."""
+    _log_banner("STEP %d: %s" % (step, label))
+    try:
+        fn()
+    except Exception as e:
+        manifest.record_stage_event(stage_name, "error", "%s failed: %s" % (label, e))
+        logger.error("✗ Error in %s: %s", label, e, exc_info=True)
+        manifest.finalize()
+        sys.exit(1)
+
+
+def main() -> None:
     """Main entry point for the law school note generator."""
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
@@ -37,149 +63,103 @@ def main():
 
     # Initialize logging first
     setup_logging()
+
+    class_paths = [Path(PARENT_FOLDER) / name for name in CLASSES]
+
     manifest = RunManifest(project_root=Path(__file__).resolve().parent)
     manifest.record_stage_event("pipeline", "start", "Pipeline run started")
 
-    logger.info("=" * 70)
-    logger.info("LAW SCHOOL NOTE GENERATOR")
-    logger.info("=" * 70)
+    _log_banner("LAW SCHOOL NOTE GENERATOR")
     if reading_only_mode:
         logger.info("*** READING-ONLY MODE ENABLED ***")
-    logger.debug(f"Processing {len(CLASS_PATHS)} classes")
+    logger.debug("Processing %d classes", len(class_paths))
 
     # Setup new-outputs-safe-delete directory
     try:
         logger.debug("Setting up output directory")
         output_dir = setup_output_directory()
-        logger.info(f"✓ Output directory ready: {output_dir}")
-        logger.debug(f"Output directory path: {output_dir}")
+        logger.info("✓ Output directory ready: %s", output_dir)
     except Exception as e:
         manifest.record_stage_event(
-            "pipeline", "error", f"Output directory setup failed: {e}"
+            "pipeline", "error", "Output directory setup failed: %s" % e
         )
-        logger.error(f"✗ Error setting up output directory: {e}", exc_info=True)
+        logger.error("✗ Error setting up output directory: %s", e, exc_info=True)
         manifest.finalize()
         sys.exit(1)
 
     # Download files from Google Drive
     if not reading_only_mode and ENABLE_GOOGLE_DRIVE:
-        logger.info("=" * 70)
-        logger.info("STEP 0: Downloading Files from Google Drive")
-        logger.info("=" * 70)
-
+        _log_banner("STEP 0: Downloading Files from Google Drive")
         try:
             logger.debug("Starting Google Drive download")
             download_results = download_from_drive(CLASSES, Path(PARENT_FOLDER))
             total_files = sum(download_results.values())
-            logger.info(f"✓ Downloaded {total_files} file(s) from Google Drive")
+            logger.info("✓ Downloaded %d file(s) from Google Drive", total_files)
             for class_name, count in download_results.items():
-                logger.debug(f"{class_name}: {count} file(s)")
+                logger.debug("%s: %d file(s)", class_name, count)
         except FileNotFoundError as e:
-            logger.warning(f"⚠ Google Drive download skipped: {e}")
+            logger.warning("⚠ Google Drive download skipped: %s", e)
             logger.info("Continuing with local files...")
         except Exception as e:
-            manifest.record_stage_event("google_drive", "error", f"Download error: {e}")
-            logger.error(f"✗ Error downloading from Google Drive: {e}", exc_info=True)
+            manifest.record_stage_event("google_drive", "error", "Download error: %s" % e)
+            logger.error("✗ Error downloading from Google Drive: %s", e, exc_info=True)
             logger.info("Continuing with local files...")
     else:
-        logger.info("=" * 70)
         if reading_only_mode:
-            logger.info("STEP 0: Skipped (reading-only mode)")
+            _log_banner("STEP 0: Skipped (reading-only mode)")
         else:
-            logger.info("STEP 0: Skipped (Google Drive disabled)")
-        logger.info("=" * 70)
+            _log_banner("STEP 0: Skipped (Google Drive disabled)")
 
     # Verify all class folders have correct structure
-    logger.info("=" * 70)
-    logger.info("STEP 1: Verifying Folder Structure")
-    logger.info("=" * 70)
+    _log_banner("STEP 1: Verifying Folder Structure")
 
-    for class_folder in CLASS_PATHS:
+    for class_folder in class_paths:
         class_name = class_folder.name
-        logger.info(f"Verifying: {class_name}")
-        logger.debug(f"Class folder path: {class_folder}")
+        logger.info("Verifying: %s", class_name)
+        logger.debug("Class folder path: %s", class_folder)
         try:
             verify_and_create_folders(class_folder)
-            logger.info(f"✓ Folder structure verified")
-            logger.info("─" * 70)
+            logger.info("✓ Folder structure verified")
+            logger.info("─" * BANNER_WIDTH)
         except Exception as e:
             manifest.record_stage_event(
-                "folder_verification", "error", f"Folder verification failed: {e}"
+                "folder_verification", "error", "Folder verification failed: %s" % e
             )
-            logger.error(f"✗ Error: {e}", exc_info=True)
+            logger.error("✗ Error: %s", e, exc_info=True)
             manifest.finalize()
             sys.exit(1)
 
     # Process lecture audio files to transcripts
     if not reading_only_mode:
-        logger.info("=" * 70)
-        logger.info("STEP 2: Converting Lecture Audio to Text")
-        logger.info("=" * 70)
-
-        try:
-            logger.debug("Starting audio processing")
-            process_audio(CLASS_PATHS, manifest)
-            logger.debug("Audio processing completed")
-        except Exception as e:
-            manifest.record_stage_event(
-                "audio_transcription", "error", f"Audio processing failed: {e}"
-            )
-            logger.error(f"✗ Error processing lectures: {e}", exc_info=True)
-            manifest.finalize()
-            sys.exit(1)
+        _run_stage(
+            manifest, "audio_transcription", "Converting Lecture Audio to Text", 2,
+            lambda: process_audio(class_paths, manifest),
+        )
     else:
-        logger.info("=" * 70)
-        logger.info("STEP 2: Skipped (Reading-only mode)")
-        logger.info("=" * 70)
+        _log_banner("STEP 2: Skipped (Reading-only mode)")
 
     # Process lecture transcripts with LLM
     if not reading_only_mode:
-        logger.info("=" * 70)
-        logger.info("STEP 3: Generating Lecture Notes with LLM")
-        logger.info("=" * 70)
-
-        try:
-            logger.debug("Starting lecture transcript processing")
-            process_all_lectures(CLASS_PATHS, output_dir, manifest, class_config=CLASSES)
-            logger.debug("Lecture transcript processing completed")
-        except Exception as e:
-            manifest.record_stage_event(
-                "lecture_llm", "error", f"Lecture LLM processing failed: {e}"
-            )
-            logger.error(f"✗ Error processing lecture transcripts: {e}", exc_info=True)
-            manifest.finalize()
-            sys.exit(1)
+        _run_stage(
+            manifest, "lecture_llm", "Generating Lecture Notes with LLM", 3,
+            lambda: process_all_lectures(class_paths, output_dir, manifest, class_config=CLASSES),
+        )
     else:
-        logger.info("=" * 70)
-        logger.info("STEP 3: Skipped (Reading-only mode)")
-        logger.info("=" * 70)
+        _log_banner("STEP 3: Skipped (Reading-only mode)")
 
     # Process reading files with LLM
-    logger.info("=" * 70)
-    logger.info("STEP 4: Generating Reading Notes with LLM")
-    logger.info("=" * 70)
-
-    try:
-        logger.debug("Starting reading processing")
-        process_all_readings(CLASS_PATHS, output_dir, manifest, class_config=CLASSES)
-        logger.debug("Reading processing completed")
-    except Exception as e:
-        manifest.record_stage_event(
-            "reading_llm", "error", f"Reading LLM processing failed: {e}"
-        )
-        logger.error(f"✗ Error processing readings: {e}", exc_info=True)
-        manifest.finalize()
-        sys.exit(1)
+    _run_stage(
+        manifest, "reading_llm", "Generating Reading Notes with LLM", 4,
+        lambda: process_all_readings(class_paths, output_dir, manifest, class_config=CLASSES),
+    )
 
     # Final summary
-    logger.info("=" * 70)
-    logger.info("PROCESSING COMPLETE!")
-    logger.info("=" * 70)
-    logger.info(f"All outputs have been saved to:")
-    logger.info(f"- Individual class folders")
-    logger.info(f"- {output_dir}")
+    _log_banner("PROCESSING COMPLETE!")
+    logger.info("All outputs have been saved to:")
+    logger.info("- Individual class folders")
+    logger.info("- %s", output_dir)
     logger.info("Input folders should now be empty (files moved to processed).")
-    logger.info("=" * 70)
+    logger.info("=" * BANNER_WIDTH)
     logger.debug("Program execution completed successfully")
     manifest.record_stage_event("pipeline", "complete", "Pipeline run completed")
     manifest.finalize()

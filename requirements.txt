@@ -11,6 +11,5 @@ google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
 python-dotenv==1.0.1
-pathlib==1.0.1
 requests
 markitdown[docx]
