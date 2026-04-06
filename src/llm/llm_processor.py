@@ -4,6 +4,7 @@ Generates notes from lecture transcripts and reading texts.
 """
 
 import os
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import List
@@ -12,6 +13,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 
 import config
+from ..utils.notes_appender import append_lecture_notes, append_reading_notes
 from ..utils.errors import ConfigurationError, PromptLoadError
 from ..utils.folder_manager import (
     get_class_paths,
@@ -55,7 +57,8 @@ def _build_model(system_prompt: str) -> genai.GenerativeModel:
 
 
 def process_all_lectures(
-    classes: List[Path], new_outputs_dir: Path, manifest: RunManifest
+    classes: List[Path], new_outputs_dir: Path, manifest: RunManifest,
+    class_config: dict | None = None,
 ) -> None:
     """Process lecture transcript files for all classes."""
     api_key = _get_required_api_key()
@@ -70,10 +73,13 @@ def process_all_lectures(
     all_text_task_args = []
     all_pdf_task_args = []
     class_file_counts = {}
+    class_folders: dict[str, Path] = {}
 
     for class_folder in classes:
         paths = get_class_paths(class_folder)
         class_name = paths["class_name"]
+
+        class_folders[class_name] = class_folder
 
         text_files = get_text_files(class_folder, reading=False)
         pdf_files = get_pdf_files(class_folder, reading=False)
@@ -136,6 +142,7 @@ def process_all_lectures(
 
     logger.info(f"Total lecture files to process: {total_files}")
     class_results = {name: {"successful": 0, "failed": 0} for name in class_file_counts}
+    successful_outputs: dict[str, list[Path]] = defaultdict(list)
     total_successful = 0
     total_failed = 0
 
@@ -153,6 +160,7 @@ def process_all_lectures(
         for future in as_completed(all_futures):
             args = all_futures[future]
             input_file = args[0]
+            output_folder = args[2]
             class_name = args[-2]
 
             try:
@@ -160,6 +168,9 @@ def process_all_lectures(
                 if success:
                     total_successful += 1
                     class_results[class_name]["successful"] += 1
+                    successful_outputs[class_name].append(
+                        output_folder / f"{original_file.stem}.md"
+                    )
                     logger.info(
                         f"✓ [{class_name}] [{total_successful + total_failed}/{total_files}] {original_file.name}"
                     )
@@ -204,9 +215,25 @@ def process_all_lectures(
         f"Completed lecture LLM processing ({total_successful} successful, {total_failed} failed)",
     )
 
+    # Append newly generated lecture notes to consolidated files
+    class_config = class_config or {}
+    for class_name, output_files in successful_outputs.items():
+        class_folder = class_folders[class_name]
+        class_info = class_config.get(class_name, {})
+        meeting_days = class_info.get("days", []) if isinstance(class_info, dict) else []
+        sorted_files = sorted(output_files)
+        count = append_lecture_notes(class_folder, sorted_files, meeting_days)
+        if count:
+            logger.info(f"✓ {class_name}: {count} lecture note(s) appended")
+            manifest.record_stage_event(
+                "notes_append", "success",
+                f"{class_name}: {count} lecture(s)",
+            )
+
 
 def process_all_readings(
-    classes: List[Path], new_outputs_dir: Path, manifest: RunManifest
+    classes: List[Path], new_outputs_dir: Path, manifest: RunManifest,
+    class_config: dict | None = None,
 ) -> None:
     """Process reading files for all classes."""
     api_key = _get_required_api_key()
@@ -222,10 +249,12 @@ def process_all_readings(
     all_pdf_task_args = []
     all_word_task_args = []
     class_file_counts = {}
+    class_folders: dict[str, Path] = {}
 
     for class_folder in classes:
         paths = get_class_paths(class_folder)
         class_name = paths["class_name"]
+        class_folders[class_name] = class_folder
 
         text_files = get_text_files(class_folder, reading=True)
         pdf_files = get_pdf_files(class_folder, reading=True)
@@ -307,6 +336,7 @@ def process_all_readings(
 
     logger.info(f"Total reading files to process: {total_files}")
     class_results = {name: {"successful": 0, "failed": 0} for name in class_file_counts}
+    successful_outputs: dict[str, list[Path]] = defaultdict(list)
     total_successful = 0
     total_failed = 0
 
@@ -329,6 +359,7 @@ def process_all_readings(
         for future in as_completed(all_futures):
             args = all_futures[future]
             input_file = args[0]
+            output_folder = args[2]
             class_name = args[-2]
 
             try:
@@ -336,6 +367,9 @@ def process_all_readings(
                 if success:
                     total_successful += 1
                     class_results[class_name]["successful"] += 1
+                    successful_outputs[class_name].append(
+                        output_folder / f"{original_file.stem}.md"
+                    )
                     logger.info(
                         f"✓ [{class_name}] [{total_successful + total_failed}/{total_files}] {original_file.name}"
                     )
@@ -379,3 +413,15 @@ def process_all_readings(
         "complete",
         f"Completed reading LLM processing ({total_successful} successful, {total_failed} failed)",
     )
+
+    # Append newly generated reading notes to consolidated files
+    for class_name, output_files in successful_outputs.items():
+        class_folder = class_folders[class_name]
+        sorted_files = sorted(output_files)
+        count = append_reading_notes(class_folder, sorted_files)
+        if count:
+            logger.info(f"✓ {class_name}: {count} reading note(s) appended")
+            manifest.record_stage_event(
+                "notes_append", "success",
+                f"{class_name}: {count} reading(s)",
+            )

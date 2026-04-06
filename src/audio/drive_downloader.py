@@ -274,7 +274,8 @@ def download_from_drive(classes: dict, parent_folder: Path) -> dict[str, int]:
     results = {}
     total_downloaded = 0
 
-    for class_name, drive_id in classes.items():
+    for class_name, class_info in classes.items():
+        drive_id = class_info.get("drive_id") if isinstance(class_info, dict) else class_info
         if not drive_id:
             logger.info(f"Skipping {class_name}: no Drive folder ID configured")
             results[class_name] = 0

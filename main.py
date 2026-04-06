@@ -140,7 +140,7 @@ def main():
 
         try:
             logger.debug("Starting lecture transcript processing")
-            process_all_lectures(CLASS_PATHS, output_dir, manifest)
+            process_all_lectures(CLASS_PATHS, output_dir, manifest, class_config=CLASSES)
             logger.debug("Lecture transcript processing completed")
         except Exception as e:
             manifest.record_stage_event(
@@ -161,7 +161,7 @@ def main():
 
     try:
         logger.debug("Starting reading processing")
-        process_all_readings(CLASS_PATHS, output_dir, manifest)
+        process_all_readings(CLASS_PATHS, output_dir, manifest, class_config=CLASSES)
         logger.debug("Reading processing completed")
     except Exception as e:
         manifest.record_stage_event(
