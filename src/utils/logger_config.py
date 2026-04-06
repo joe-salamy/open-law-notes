@@ -25,7 +25,7 @@ def setup_logging(log_dir: Path = None) -> logging.Logger:
     # Set up log directory
     if log_dir is None:
         # Default to logs folder in project root
-        project_root = Path(__file__).parent.parent
+        project_root = Path(__file__).parent.parent.parent
         log_dir = project_root / "logs"
 
     log_dir.mkdir(parents=True, exist_ok=True)

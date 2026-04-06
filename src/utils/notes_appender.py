@@ -41,7 +41,7 @@ def get_last_h3_number(filepath: Path) -> int:
     if not filepath.exists():
         return 0
     text = filepath.read_text(encoding="utf-8")
-    matches = re.findall(r"^### (\d+)\\?\.", text, re.MULTILINE)
+    matches = re.findall(r"^### (\d+)\.", text, re.MULTILINE)
     if matches:
         return int(matches[-1])
     return 0
@@ -53,7 +53,7 @@ def get_last_lecture_date(filepath: Path) -> date | None:
         return None
     text = filepath.read_text(encoding="utf-8")
     # Match: ### 27. Thur, Mar 19 - ... (with optional backslash-escaped dot)
-    matches = re.findall(r"^### \d+\\?\. \w+, (\w+) (\d+)", text, re.MULTILINE)
+    matches = re.findall(r"^### \d+\. \w+, (\w+) (\d+)", text, re.MULTILINE)
     if not matches:
         return None
     month_str, day_str = matches[-1]
@@ -127,7 +127,7 @@ def append_reading_notes(class_folder: Path, md_files: list[Path]) -> int:
         next_num = get_last_h3_number(target_file) + 1
         content = md_file.read_text(encoding="utf-8")
         filename_stem = md_file.stem
-        new_header = f"{next_num}\\. {filename_stem}"
+        new_header = f"{next_num}. {filename_stem}"
         content = replace_h3_header(content, new_header)
 
         # Append to consolidated file
@@ -165,10 +165,10 @@ def append_lecture_notes(
         if last_date and meeting_days:
             lecture_date = next_meeting_date(last_date, meeting_days)
             date_str = format_date(lecture_date)
-            new_header = f"{next_num}\\. {date_str} - {topic}"
+            new_header = f"{next_num}. {date_str} - {topic}"
         else:
             # First entry or no meeting days configured — skip date
-            new_header = f"{next_num}\\. {topic}"
+            new_header = f"{next_num}. {topic}"
 
         content = replace_h3_header(content, new_header)
 
