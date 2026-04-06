@@ -115,7 +115,7 @@ def extract_topic_from_h3(content: str) -> str:
 def append_reading_notes(class_folder: Path, md_files: list[Path]) -> int:
     """
     Append the given reading note files to class_folder/reading-notes.md.
-    Deletes each file after appending.  Returns the number of notes appended.
+    Returns the number of notes appended.
     """
     target_file = class_folder / "reading-notes.md"
 
@@ -132,7 +132,7 @@ def append_reading_notes(class_folder: Path, md_files: list[Path]) -> int:
 
         # Append to consolidated file
         with open(target_file, "a", encoding="utf-8") as f:
-            if target_file.stat().st_size > 0 if target_file.exists() else False:
+            if target_file.exists() and target_file.stat().st_size > 0:
                 f.write("\n\n")
             f.write(content.rstrip() + "\n")
 
@@ -147,7 +147,7 @@ def append_lecture_notes(
 ) -> int:
     """
     Append the given lecture note files to class_folder/lecture-notes.md.
-    Deletes each file after appending.  Returns the number of notes appended.
+    Returns the number of notes appended.
     """
     target_file = class_folder / "lecture-notes.md"
 

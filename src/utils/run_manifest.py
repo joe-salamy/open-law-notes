@@ -7,7 +7,7 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 
 def _utc_now() -> str:
@@ -76,19 +76,20 @@ class RunManifest:
         self._append(payload)
 
     def finalize(self) -> None:
-        summary = {
-            "run_id": self.run_id,
-            "generated_at": _utc_now(),
-            "records": self._records,
-            "success": self._success,
-            "failed": self._failed,
-            "skipped": self._skipped,
-            "events_file": str(self.events_path),
-        }
+        with self._lock:
+            summary = {
+                "run_id": self.run_id,
+                "generated_at": _utc_now(),
+                "records": self._records,
+                "success": self._success,
+                "failed": self._failed,
+                "skipped": self._skipped,
+                "events_file": str(self.events_path),
+            }
         with self.summary_path.open("w", encoding="utf-8") as handle:
             json.dump(summary, handle, indent=2)
 
-    def _append(self, payload: dict) -> None:
+    def _append(self, payload: dict[str, Any]) -> None:
         with self._lock:
             if payload.get("type") == "file_result":
                 status = payload.get("status")

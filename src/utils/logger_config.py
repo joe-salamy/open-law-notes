@@ -5,11 +5,11 @@ Creates log files with timestamps for each run and provides formatted console ou
 
 import logging
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
-from datetime import datetime
 
 
-def setup_logging(log_dir: Path = None) -> logging.Logger:
+def setup_logging(log_dir: Path | None = None) -> logging.Logger:
     """
     Setup logging configuration with file and console handlers.
 
@@ -31,7 +31,7 @@ def setup_logging(log_dir: Path = None) -> logging.Logger:
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # Create timestamped log file
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     log_file = log_dir / f"law_notes_{timestamp}.log"
 
     # Create logger
@@ -68,7 +68,7 @@ def setup_logging(log_dir: Path = None) -> logging.Logger:
     return logger
 
 
-def get_logger(name: str = None) -> logging.Logger:
+def get_logger(name: str | None = None) -> logging.Logger:
     """
     Get a logger instance for a specific module.
 

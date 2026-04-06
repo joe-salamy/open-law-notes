@@ -3,11 +3,11 @@ Folder structure verification and creation.
 Ensures each class has the required folder hierarchy.
 """
 
-import sys
 from pathlib import Path
-from typing import List
+
 import config
-from .file_mover import setup_output_directory
+
+from .errors import FileOperationError
 from .logger_config import get_logger
 
 # Initialize logger
@@ -22,16 +22,13 @@ def verify_and_create_folders(class_folder: Path) -> None:
         class_folder: Path to the class root folder
 
     Raises:
-        Exception: If folder creation fails
+        FileOperationError: If folder creation fails
     """
-    if not isinstance(class_folder, Path):
-        class_folder = Path(class_folder)
-
     logger.debug(f"Verifying folder structure for: {class_folder}")
 
     if not class_folder.exists():
         logger.error(f"Class folder does not exist: {class_folder}")
-        raise Exception(f"Class folder does not exist: {class_folder}")
+        raise FileOperationError(f"Class folder does not exist: {class_folder}")
 
     # Define all required folders
     llm_base = class_folder / config.LLM_BASE
@@ -51,15 +48,15 @@ def verify_and_create_folders(class_folder: Path) -> None:
     for folder in required_folders:
         try:
             folder.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
+        except OSError as e:
             logger.error(f"Failed to create folder {folder}: {e}", exc_info=True)
-            raise Exception(f"Failed to create folder {folder}: {e}")
+            raise FileOperationError(f"Failed to create folder {folder}: {e}") from e
 
     logger.debug(f"Folder structure verification complete for: {class_folder.name}")
     return None
 
 
-def get_class_paths(class_folder: Path) -> dict:
+def get_class_paths(class_folder: Path) -> dict[str, str | Path]:
     """
     Get all relevant paths for a class.
 
@@ -69,9 +66,6 @@ def get_class_paths(class_folder: Path) -> dict:
     Returns:
         Dictionary with all folder paths
     """
-    if not isinstance(class_folder, Path):
-        class_folder = Path(class_folder)
-
     llm_base = class_folder / config.LLM_BASE
 
     return {
@@ -90,7 +84,7 @@ def get_class_paths(class_folder: Path) -> dict:
     }
 
 
-def get_audio_files(class_folder: Path) -> List[Path]:
+def get_audio_files(class_folder: Path) -> list[Path]:
     """
     Get all M4A audio files from lecture-input folder.
 
@@ -112,7 +106,7 @@ def get_audio_files(class_folder: Path) -> List[Path]:
     return audio_files
 
 
-def get_text_files(class_folder: Path, reading: bool = False) -> List[Path]:
+def get_text_files(class_folder: Path, reading: bool = False) -> list[Path]:
     """
     Get all text-based files (TXT and MD) from lecture-input or reading-input folder.
 
@@ -142,7 +136,7 @@ def get_text_files(class_folder: Path, reading: bool = False) -> List[Path]:
     return text_files
 
 
-def get_word_files(class_folder: Path, reading: bool = True) -> List[Path]:
+def get_word_files(class_folder: Path, reading: bool = True) -> list[Path]:
     """
     Get all Word document files (.doc and .docx) from reading-input or lecture-input folder.
 
@@ -172,7 +166,7 @@ def get_word_files(class_folder: Path, reading: bool = True) -> List[Path]:
     return word_files
 
 
-def get_pdf_files(class_folder: Path, reading: bool = True) -> List[Path]:
+def get_pdf_files(class_folder: Path, reading: bool = True) -> list[Path]:
     """
     Get all PDF files from reading-input or lecture-input folder.
 

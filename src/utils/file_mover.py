@@ -4,8 +4,8 @@ Handles moving processed files and copying outputs.
 """
 
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
-from datetime import datetime
 
 import config
 from .logger_config import get_logger
@@ -56,7 +56,7 @@ def move_to_processed(file_path: Path, processed_folder: Path) -> bool:
 
         # If destination exists, add timestamp to avoid overwriting
         if destination.exists():
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
             stem = destination.stem
             suffix = destination.suffix
             destination = processed_folder / f"{stem}_{timestamp}{suffix}"
@@ -64,7 +64,7 @@ def move_to_processed(file_path: Path, processed_folder: Path) -> bool:
                 f"Destination exists, using timestamped name: {destination.name}"
             )
 
-        shutil.move(str(file_path), str(destination))
+        shutil.move(file_path, destination)
         logger.debug(f"File moved successfully: {file_path.name} -> {destination}")
         return True
 
@@ -94,7 +94,7 @@ def copy_to_new_outputs(
         resolved_name = destination_name if destination_name else file_path.name
         destination = new_outputs_dir / resolved_name
 
-        shutil.copy2(str(file_path), str(destination))
+        shutil.copy2(file_path, destination)
         logger.debug(f"File copied successfully: {file_path.name} -> {destination}")
         return True
 
@@ -105,15 +105,4 @@ def copy_to_new_outputs(
         return False
 
 
-def move_audio_to_processed(audio_file: Path, processed_audio_folder: Path) -> bool:
-    """
-    Move an audio file to the processed audio folder.
-
-    Args:
-        audio_file: Path to the audio file
-        processed_audio_folder: Destination folder for processed audio
-
-    Returns:
-        True if successful, False otherwise
-    """
-    return move_to_processed(audio_file, processed_audio_folder)
+move_audio_to_processed = move_to_processed
