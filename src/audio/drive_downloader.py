@@ -5,7 +5,10 @@ Downloads m4a files from Google Drive and moves them to local lecture-input fold
 
 import io
 import json
+import re
+import stat
 from pathlib import Path
+from typing import Any, TypeAlias
 
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -19,6 +22,8 @@ from ..utils.logger_config import get_logger
 
 logger = get_logger(__name__)
 
+DriveService: TypeAlias = Any  # google-api-python-client Resource
+
 # Full drive scope is required: the app needs to list, download, and move
 # files that were NOT created by this app (user-uploaded recordings).
 SCOPES = ["https://www.googleapis.com/auth/drive"]
@@ -28,8 +33,17 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TOKEN_FILE = PROJECT_ROOT / "token.json"
 CREDENTIALS_FILE = PROJECT_ROOT / "credentials.json"
 
+_DRIVE_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
-def get_drive_service():
+
+def _validate_drive_id(drive_id: str) -> str:
+    """Validate that a string looks like a Google Drive folder ID."""
+    if not _DRIVE_ID_RE.fullmatch(drive_id):
+        raise ValueError(f"Invalid Drive folder ID: {drive_id!r}")
+    return drive_id
+
+
+def get_drive_service() -> DriveService:
     """
     Authenticate and return a Google Drive service object.
     Uses OAuth 2.0 with stored credentials or prompts for login.
@@ -45,44 +59,48 @@ def get_drive_service():
             creds = None
 
     # Refresh or get new credentials if needed
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
+    if creds and creds.expired and creds.refresh_token:
+        try:
             logger.debug("Refreshing expired credentials")
             creds.refresh(Request())
-        else:
-            if not CREDENTIALS_FILE.exists():
-                raise FileNotFoundError(
-                    f"credentials.json not found at {CREDENTIALS_FILE}. "
-                    "Please download it from Google Cloud Console."
-                )
-            logger.info("Starting OAuth flow - browser will open for authentication")
-            logger.info(
-                "If you see 'redirect_uri_mismatch' error, add these URIs to Google Cloud Console:"
+        except Exception:
+            logger.warning("Token refresh failed, re-authenticating")
+            creds = None
+
+    if not creds or not creds.valid:
+        if not CREDENTIALS_FILE.exists():
+            raise FileNotFoundError(
+                f"credentials.json not found at {CREDENTIALS_FILE}. "
+                "Please download it from Google Cloud Console."
             )
-            logger.info("- http://localhost:8080/")
-            logger.info("- http://localhost:8080")
-            flow = InstalledAppFlow.from_client_secrets_file(
-                str(CREDENTIALS_FILE), SCOPES
-            )
-            creds = flow.run_local_server(port=8080)
+        logger.info("Starting OAuth flow - browser will open for authentication")
+        logger.info(
+            "If you see 'redirect_uri_mismatch' error, add these URIs to Google Cloud Console:"
+        )
+        logger.info("- http://localhost:8080/")
+        logger.info("- http://localhost:8080")
+        flow = InstalledAppFlow.from_client_secrets_file(
+            str(CREDENTIALS_FILE), SCOPES
+        )
+        creds = flow.run_local_server(port=8080)
 
         # Save credentials for next run
-        with open(TOKEN_FILE, "w") as token:
-            token.write(creds.to_json())
-            logger.debug(f"Credentials saved to {TOKEN_FILE}")
+        TOKEN_FILE.write_text(creds.to_json())
+        TOKEN_FILE.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        logger.debug(f"Credentials saved to {TOKEN_FILE}")
 
     return build("drive", "v3", credentials=creds)
 
 
-def find_folder_by_name(service, parent_folder_id: str, folder_name: str) -> str | None:
+def find_folder_by_name(service: DriveService, parent_folder_id: str, folder_name: str) -> str | None:
     """
     Find a folder by name within a parent folder.
     Returns the folder ID if found, None otherwise.
     """
+    _validate_drive_id(parent_folder_id)
     safe_name = folder_name.replace("\\", "\\\\").replace("'", "\\'")
-    safe_parent = parent_folder_id.replace("\\", "\\\\").replace("'", "\\'")
     query = (
-        f"'{safe_parent}' in parents and "
+        f"'{parent_folder_id}' in parents and "
         f"name = '{safe_name}' and "
         f"mimeType = 'application/vnd.google-apps.folder' and "
         f"trashed = false"
@@ -100,7 +118,7 @@ def find_folder_by_name(service, parent_folder_id: str, folder_name: str) -> str
     return None
 
 
-def find_or_create_processed_folder(service, parent_folder_id: str) -> str:
+def find_or_create_processed_folder(service: DriveService, parent_folder_id: str) -> str:
     """
     Find or create a 'Processed' folder inside the given parent folder.
     Returns the folder ID.
@@ -125,14 +143,14 @@ def find_or_create_processed_folder(service, parent_folder_id: str) -> str:
     return folder["id"]
 
 
-def get_m4a_files(service, folder_id: str) -> list[dict]:
+def get_m4a_files(service: DriveService, folder_id: str) -> list[dict[str, Any]]:
     """
     Get all m4a files in a folder.
     Returns a list of file metadata dictionaries.
     """
-    safe_id = folder_id.replace("\\", "\\\\").replace("'", "\\'")
+    _validate_drive_id(folder_id)
     query = (
-        f"'{safe_id}' in parents and "
+        f"'{folder_id}' in parents and "
         f"(mimeType = 'audio/mp4' or mimeType = 'audio/x-m4a' or name contains '.m4a') and "
         f"trashed = false"
     )
@@ -146,7 +164,7 @@ def get_m4a_files(service, folder_id: str) -> list[dict]:
     return results.get("files", [])
 
 
-def download_file(service, file_id: str, destination_path: Path) -> bool:
+def download_file(service: DriveService, file_id: str, destination_path: Path) -> bool:
     """
     Download a file from Google Drive to a local path.
     Returns True if successful, False otherwise.
@@ -173,7 +191,7 @@ def download_file(service, file_id: str, destination_path: Path) -> bool:
         return False
 
 
-def move_file_to_folder(service, file_id: str, new_folder_id: str) -> bool:
+def move_file_to_folder(service: DriveService, file_id: str, new_folder_id: str) -> bool:
     """
     Move a file to a different folder in Google Drive.
     Returns True if successful, False otherwise.
@@ -198,7 +216,7 @@ def move_file_to_folder(service, file_id: str, new_folder_id: str) -> bool:
         return False
 
 
-def download_class_files(service, class_folder: Path, drive_folder_id: str) -> int:
+def download_class_files(service: DriveService, class_folder: Path, drive_folder_id: str) -> int:
     """
     Download all m4a files for a single class from Google Drive.
     Returns the number of files downloaded.

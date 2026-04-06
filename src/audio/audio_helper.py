@@ -4,10 +4,10 @@ Handles audio conversion, noise reduction, filtering, and normalization.
 Also includes transcript formatting utilities.
 """
 
-import os
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Protocol, Sequence
+from typing import Protocol
 
 import numpy as np
 import noisereduce as nr
@@ -46,34 +46,24 @@ def preprocess_audio(audio_file: Path) -> tuple[np.ndarray, int]:
         Tuple of (audio_array, sample_rate)
     """
     logger.debug(f"Starting audio preprocessing for: {audio_file.name}")
-    temp_wav_path = None
 
-    try:
-        # Step 1: Convert M4A to WAV using pydub (handles M4A properly)
-        logger.debug(f"[M4A→WAV] Converting {audio_file.name}")
-        audio = AudioSegment.from_file(str(audio_file), format="m4a")
+    # Step 1: Convert M4A to WAV using pydub (handles M4A properly)
+    logger.debug(f"[M4A→WAV] Converting {audio_file.name}")
+    audio = AudioSegment.from_file(str(audio_file), format="m4a")
 
-        # Create temporary WAV file
-        temp_wav = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-        temp_wav_path = temp_wav.name
-        temp_wav.close()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp_wav_path = Path(tmpdir) / "converted.wav"
 
         # Export as WAV (16kHz mono)
         audio = audio.set_frame_rate(16000).set_channels(1)
-        audio.export(temp_wav_path, format="wav")
-        logger.debug(f"[M4A→WAV DONE] Converted to WAV")
+        audio.export(str(temp_wav_path), format="wav")
+        logger.debug("[M4A→WAV DONE] Converted to WAV")
 
         # Load the converted WAV file
-        logger.debug(f"[LOAD AUDIO] Loading converted audio at 16kHz mono")
-        samples, sample_rate = librosa.load(temp_wav_path, sr=16000, mono=True)
+        logger.debug("[LOAD AUDIO] Loading converted audio at 16kHz mono")
+        samples, sample_rate = librosa.load(str(temp_wav_path), sr=16000, mono=True)
         logger.debug(f"[LOAD AUDIO DONE] {len(samples)} samples at {sample_rate}Hz")
         # samples are already in float32 format normalized to [-1, 1]
-
-    finally:
-        # Clean up temporary file
-        if temp_wav_path and os.path.exists(temp_wav_path):
-            os.unlink(temp_wav_path)
-            logger.debug(f"Cleaned up temporary conversion file")
 
     # Step 2: Apply noise reduction
     # Uses non-stationary noise reduction algorithm, and reduce sound only by 50% (1.0 = max)
@@ -97,7 +87,7 @@ def preprocess_audio(audio_file: Path) -> tuple[np.ndarray, int]:
         high = 0.95
 
     b, a = signal.butter(4, [low, high], btype="band")
-    samples = signal.filtfilt(b, a, samples)
+    samples = signal.filtfilt(b, a, samples).astype(np.float32)
     logger.debug("Bandpass filter applied")
 
     logger.debug(f"Audio preprocessing completed for: {audio_file.name}")
@@ -172,11 +162,9 @@ def format_transcription_with_speakers(
 
     paragraphs = []
     current_paragraph = []
-    paragraph_start_time = segments_list[0].start if segments_list else 0
+    paragraph_start_time = segments_list[0].start
     prev_end_time = paragraph_start_time
-    current_speaker = (
-        getattr(segments_list[0], "speaker", None) if segments_list else None
-    )
+    current_speaker = getattr(segments_list[0], "speaker", None)
 
     for segment in segments_list:
         gap = segment.start - prev_end_time

@@ -8,7 +8,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
+
 import assemblyai as aai
 import soundfile as sf
 from tqdm import tqdm
@@ -45,6 +45,16 @@ class TranscriptionResult:
     wav_file: Path | None
     processed_audio_folder: Path
     class_name: str
+
+
+@dataclass
+class _Segment:
+    """Typed segment satisfying the TranscriptSegment protocol."""
+
+    start: float
+    end: float
+    text: str
+    speaker: str | None
 
 
 def _transcribe_with_retries(
@@ -158,7 +168,7 @@ def transcribe_single_file(task: TranscriptionTask) -> TranscriptionResult:
 
         if config.ENABLE_DIARIZATION:
             segments_list = [
-                SimpleNamespace(
+                _Segment(
                     start=u.start / 1000.0,
                     end=u.end / 1000.0,
                     text=u.text,
@@ -168,7 +178,7 @@ def transcribe_single_file(task: TranscriptionTask) -> TranscriptionResult:
             ]
         else:
             segments_list = [
-                SimpleNamespace(
+                _Segment(
                     start=s.start / 1000.0,
                     end=s.end / 1000.0,
                     text=s.text,
@@ -189,8 +199,7 @@ def transcribe_single_file(task: TranscriptionTask) -> TranscriptionResult:
             include_speakers=config.ENABLE_DIARIZATION,
         )
 
-        with open(txt_output_path, "w", encoding="utf-8") as handle:
-            handle.write(transcription)
+        txt_output_path.write_text(transcription, encoding="utf-8")
 
         manifest.record_file_result(
             stage="audio_transcription",
@@ -244,6 +253,7 @@ def process_all_lectures(classes: list[Path], manifest: RunManifest) -> None:
 
     Args:
         classes: List of class folder paths
+        manifest: Run manifest for recording stage events and file results
     """
     if not config.ASSEMBLYAI_API_KEY:
         raise ConfigurationError(
