@@ -4,27 +4,28 @@ Downloads m4a files from Google Drive and moves them to local lecture-input fold
 """
 
 import io
+import json
 from pathlib import Path
-from pickle import UnpicklingError
+
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from googleapiclient.errors import HttpError
-import pickle
 
 import config
 from ..utils.logger_config import get_logger
 
 logger = get_logger(__name__)
 
-# Google Drive API scopes
+# Full drive scope is required: the app needs to list, download, and move
+# files that were NOT created by this app (user-uploaded recordings).
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 # Token and credentials file paths
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-TOKEN_FILE = PROJECT_ROOT / "token.pickle"
+TOKEN_FILE = PROJECT_ROOT / "token.json"
 CREDENTIALS_FILE = PROJECT_ROOT / "credentials.json"
 
 
@@ -38,9 +39,8 @@ def get_drive_service():
     # Load existing token if available
     if TOKEN_FILE.exists():
         try:
-            with open(TOKEN_FILE, "rb") as token:
-                creds = pickle.load(token)
-        except (OSError, UnpicklingError) as exc:
+            creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), SCOPES)
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
             logger.warning(f"Invalid token file {TOKEN_FILE}, re-auth required: {exc}")
             creds = None
 
@@ -67,8 +67,8 @@ def get_drive_service():
             creds = flow.run_local_server(port=8080)
 
         # Save credentials for next run
-        with open(TOKEN_FILE, "wb") as token:
-            pickle.dump(creds, token)
+        with open(TOKEN_FILE, "w") as token:
+            token.write(creds.to_json())
             logger.debug(f"Credentials saved to {TOKEN_FILE}")
 
     return build("drive", "v3", credentials=creds)
@@ -79,9 +79,11 @@ def find_folder_by_name(service, parent_folder_id: str, folder_name: str) -> str
     Find a folder by name within a parent folder.
     Returns the folder ID if found, None otherwise.
     """
+    safe_name = folder_name.replace("\\", "\\\\").replace("'", "\\'")
+    safe_parent = parent_folder_id.replace("\\", "\\\\").replace("'", "\\'")
     query = (
-        f"'{parent_folder_id}' in parents and "
-        f"name = '{folder_name}' and "
+        f"'{safe_parent}' in parents and "
+        f"name = '{safe_name}' and "
         f"mimeType = 'application/vnd.google-apps.folder' and "
         f"trashed = false"
     )
@@ -128,8 +130,9 @@ def get_m4a_files(service, folder_id: str) -> list[dict]:
     Get all m4a files in a folder.
     Returns a list of file metadata dictionaries.
     """
+    safe_id = folder_id.replace("\\", "\\\\").replace("'", "\\'")
     query = (
-        f"'{folder_id}' in parents and "
+        f"'{safe_id}' in parents and "
         f"(mimeType = 'audio/mp4' or mimeType = 'audio/x-m4a' or name contains '.m4a') and "
         f"trashed = false"
     )

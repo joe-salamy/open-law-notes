@@ -9,6 +9,7 @@ env/
 # Google OAuth Credentials (NEVER commit these!)
 credentials.json
 token.pickle
+token.json
 
 # Python cache
 __pycache__/

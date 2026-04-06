@@ -7,7 +7,7 @@ Also includes transcript formatting utilities.
 import os
 import tempfile
 from pathlib import Path
-from typing import List, Tuple
+from typing import Protocol, Sequence
 
 import numpy as np
 import noisereduce as nr
@@ -17,11 +17,19 @@ from pydub import AudioSegment
 
 from ..utils.logger_config import get_logger
 
-# Initialize logger
 logger = get_logger(__name__)
 
 
-def preprocess_audio(audio_file: Path) -> Tuple[np.ndarray, int]:
+class TranscriptSegment(Protocol):
+    """Protocol for transcript segments returned by transcription services."""
+
+    start: float
+    end: float
+    text: str
+    speaker: str | None
+
+
+def preprocess_audio(audio_file: Path) -> tuple[np.ndarray, int]:
     """
     Preprocess audio file for optimal transcription.
 
@@ -92,21 +100,6 @@ def preprocess_audio(audio_file: Path) -> Tuple[np.ndarray, int]:
     samples = signal.filtfilt(b, a, samples)
     logger.debug("Bandpass filter applied")
 
-    # COMMENTED OUT SINCE ANNOYING TO LISTEN BACK AND TOO QUIET
-
-    # Step 4: Normalize audio levels
-    # Target: -12dB LUFS (prevents clipping, ensures consistent volume)
-    # logger.debug("Normalizing audio levels to -12dB")
-    # max_amplitude = np.abs(samples).max()
-    # if max_amplitude > 0:
-    #     target_amplitude = 10 ** (-12 / 20)  # -12dB
-    #     samples = samples * (target_amplitude / max_amplitude)
-    #     logger.debug(
-    #         f"Audio normalized: max amplitude {max_amplitude:.4f} -> {target_amplitude:.4f}"
-    #     )
-    # else:
-    #     logger.warning(f"Audio file has zero amplitude: {audio_file.name}")
-
     logger.debug(f"Audio preprocessing completed for: {audio_file.name}")
     return samples, sample_rate
 
@@ -127,68 +120,6 @@ def format_timestamp(seconds: float) -> str:
     return f"[{hours:02d}:{minutes:02d}:{secs:02d}]"
 
 
-def format_transcription_paragraphs(
-    segments_list: List,
-    paragraph_gap: float = 3.0,  # Seconds of silence to start new paragraph
-    max_paragraph_duration: float = 30.0,  # Max 30 seconds per paragraph
-) -> str:
-    """
-    Format transcription into paragraphs with one timestamp per paragraph.
-    Most token-efficient for LLM context.
-
-    Groups segments into paragraphs based on pauses and duration limits.
-    Reduces timestamp count by ~60-70% compared to per-segment timestamps.
-
-    Args:
-        segments_list: List of transcription segments from faster-whisper
-        paragraph_gap: Seconds of silence between segments to start new paragraph (default: 3.0)
-        max_paragraph_duration: Maximum duration of a paragraph in seconds (default: 30.0)
-
-    Returns:
-        Formatted transcription string with paragraph-based timestamps
-    """
-    if not segments_list:
-        return ""
-
-    paragraphs = []
-    current_paragraph = []
-    paragraph_start_time = segments_list[0].start if segments_list else 0
-    prev_end_time = paragraph_start_time
-
-    for segment in segments_list:
-        gap = segment.start - prev_end_time
-
-        # Calculate what duration would be if we add this segment
-        if current_paragraph:
-            duration_with_new_segment = segment.end - paragraph_start_time
-        else:
-            duration_with_new_segment = segment.end - segment.start
-
-        # Start new paragraph if:
-        # 1. Significant pause detected (topic change)
-        # 2. Adding this segment would exceed max duration (and we have content)
-        if current_paragraph and (
-            gap >= paragraph_gap or duration_with_new_segment > max_paragraph_duration
-        ):
-            # Save current paragraph
-            timestamp = format_timestamp(paragraph_start_time)
-            paragraph_text = " ".join(current_paragraph)
-            paragraphs.append(f"{timestamp}\n{paragraph_text}\n")
-            current_paragraph = []
-            paragraph_start_time = segment.start
-
-        current_paragraph.append(segment.text.strip())
-        prev_end_time = segment.end
-
-    # Add final paragraph
-    if current_paragraph:
-        timestamp = format_timestamp(paragraph_start_time)
-        paragraph_text = " ".join(current_paragraph)
-        paragraphs.append(f"{timestamp}\n{paragraph_text}")
-
-    return "\n".join(paragraphs)
-
-
 def format_speaker_label(speaker: str) -> str:
     """
     Convert SPEAKER_00 to Speaker A, SPEAKER_01 to Speaker B, etc.
@@ -205,14 +136,15 @@ def format_speaker_label(speaker: str) -> str:
     try:
         # Extract number from SPEAKER_XX format
         num = int(speaker.split("_")[-1])
-        letter = chr(65 + num)  # 65 is ASCII 'A'
-        return f"Speaker {letter}"
+        if num < 26:
+            return f"Speaker {chr(65 + num)}"  # 65 is ASCII 'A'
+        return f"Speaker {num + 1}"
     except (ValueError, IndexError):
         return speaker  # Return as-is if parsing fails
 
 
 def format_transcription_with_speakers(
-    segments_list: List,
+    segments_list: Sequence[TranscriptSegment],
     paragraph_gap: float = 3.0,
     max_paragraph_duration: float = 30.0,
     include_speakers: bool = False,

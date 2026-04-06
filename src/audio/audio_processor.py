@@ -6,16 +6,15 @@ Orchestrates transcription workflow: preprocessing, transcription, and file mana
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import List, Tuple
-
 import assemblyai as aai
 import soundfile as sf
 from tqdm import tqdm
 
 import config
-from ..utils.errors import FileProcessingError, RetryableServiceError
+from ..utils.errors import ConfigurationError, FileProcessingError, RetryableServiceError
 from ..utils.file_mover import move_audio_to_processed
 from ..utils.folder_manager import get_audio_files, get_class_paths
 from ..utils.logger_config import get_logger
@@ -25,10 +24,32 @@ from .audio_helper import format_transcription_with_speakers, preprocess_audio
 logger = get_logger(__name__)
 
 
+@dataclass
+class TranscriptionTask:
+    """Input arguments for a single transcription job."""
+
+    audio_file: Path
+    output_folder: Path
+    processed_audio_folder: Path
+    class_name: str
+    manifest: RunManifest
+
+
+@dataclass
+class TranscriptionResult:
+    """Result of a single transcription job."""
+
+    success: bool
+    message: str
+    audio_file: Path
+    wav_file: Path | None
+    processed_audio_folder: Path
+    class_name: str
+
+
 def _transcribe_with_retries(
     wav_file_path: Path, max_retries: int = 3
 ) -> aai.Transcript:
-    aai.settings.api_key = config.ASSEMBLYAI_API_KEY
     transcription_config = aai.TranscriptionConfig(
         speech_models=[aai.SpeechModel.slam_1],
         language_code="en",
@@ -79,19 +100,21 @@ def _transcribe_with_retries(
     )
 
 
-def transcribe_single_file(
-    args: Tuple[Path, Path, Path, str, RunManifest],
-) -> Tuple[bool, str, Path, Path | None, Path, str]:
+def transcribe_single_file(task: TranscriptionTask) -> TranscriptionResult:
     """
     Transcribe a single audio file with preprocessing and timestamps.
 
     Args:
-        args: Tuple of (audio_file, output_folder, processed_audio_folder, class_name, manifest)
+        task: TranscriptionTask with input paths and metadata
 
     Returns:
-        Tuple of (success, message, audio_file, wav_file_path, processed_audio_folder, class_name)
+        TranscriptionResult with outcome details
     """
-    audio_file, output_folder, processed_audio_folder, class_name, manifest = args
+    audio_file = task.audio_file
+    output_folder = task.output_folder
+    processed_audio_folder = task.processed_audio_folder
+    class_name = task.class_name
+    manifest = task.manifest
     wav_file_path = None
     txt_output_path = output_folder / f"{audio_file.stem}.txt"
 
@@ -109,13 +132,13 @@ def transcribe_single_file(
                 output_files=[txt_output_path],
                 message="Resumed from existing transcript",
             )
-            return (
-                True,
-                "Skipped (already transcribed)",
-                audio_file,
-                None,
-                processed_audio_folder,
-                class_name,
+            return TranscriptionResult(
+                success=True,
+                message="Skipped (already transcribed)",
+                audio_file=audio_file,
+                wav_file=None,
+                processed_audio_folder=processed_audio_folder,
+                class_name=class_name,
             )
 
         logger.info(f"[PREPROCESSING START] {audio_file.name}")
@@ -178,13 +201,13 @@ def transcribe_single_file(
         )
 
         logger.info(f"[WORKER COMPLETE] ✓ Successfully transcribed: {audio_file.name}")
-        return (
-            True,
-            "Successfully transcribed",
-            audio_file,
-            wav_file_path,
-            processed_audio_folder,
-            class_name,
+        return TranscriptionResult(
+            success=True,
+            message="Successfully transcribed",
+            audio_file=audio_file,
+            wav_file=wav_file_path,
+            processed_audio_folder=processed_audio_folder,
+            class_name=class_name,
         )
 
     except (
@@ -204,17 +227,17 @@ def transcribe_single_file(
             message=str(error),
             error_type=type(error).__name__,
         )
-        return (
-            False,
-            f"Error: {error}",
-            audio_file,
-            None,
-            processed_audio_folder,
-            class_name,
+        return TranscriptionResult(
+            success=False,
+            message=f"Error: {error}",
+            audio_file=audio_file,
+            wav_file=None,
+            processed_audio_folder=processed_audio_folder,
+            class_name=class_name,
         )
 
 
-def process_all_lectures(classes: List[Path], manifest: RunManifest) -> None:
+def process_all_lectures(classes: list[Path], manifest: RunManifest) -> None:
     """
     Process lecture audio files for all classes.
     Parallelizes across ALL classes using a thread pool (I/O-bound).
@@ -222,6 +245,12 @@ def process_all_lectures(classes: List[Path], manifest: RunManifest) -> None:
     Args:
         classes: List of class folder paths
     """
+    if not config.ASSEMBLYAI_API_KEY:
+        raise ConfigurationError(
+            "ASSEMBLYAI_API_KEY environment variable is not set"
+        )
+    aai.settings.api_key = config.ASSEMBLYAI_API_KEY
+
     logger.info("Using AssemblyAI transcription (Universal-3-Pro model)")
     logger.info(f"Concurrent uploads: {config.MAX_AUDIO_WORKERS}")
     logger.info(f"Speaker diarization: {config.ENABLE_DIARIZATION}")
@@ -229,7 +258,7 @@ def process_all_lectures(classes: List[Path], manifest: RunManifest) -> None:
         "audio_transcription", "start", "Starting audio transcription"
     )
 
-    all_task_args = []
+    all_tasks: list[TranscriptionTask] = []
     class_file_counts = {}
 
     for class_folder in classes:
@@ -239,27 +268,27 @@ def process_all_lectures(classes: List[Path], manifest: RunManifest) -> None:
         class_file_counts[class_name] = len(audio_files)
 
         for audio_file in audio_files:
-            all_task_args.append(
-                (
-                    audio_file,
-                    paths["lecture_input"],
-                    paths["lecture_processed_audio"],
-                    class_name,
-                    manifest,
+            all_tasks.append(
+                TranscriptionTask(
+                    audio_file=audio_file,
+                    output_folder=paths["lecture_input"],
+                    processed_audio_folder=paths["lecture_processed_audio"],
+                    class_name=class_name,
+                    manifest=manifest,
                 )
             )
 
     for class_name, count in class_file_counts.items():
         logger.info(f"{class_name}: {count} audio file(s)")
 
-    if not all_task_args:
+    if not all_tasks:
         logger.info("No audio files found in any class")
         manifest.record_stage_event(
             "audio_transcription", "complete", "No audio files to process"
         )
         return
 
-    total_files = len(all_task_args)
+    total_files = len(all_tasks)
     logger.info(f"Total audio files to process: {total_files}")
 
     log_file_path = None
@@ -278,39 +307,30 @@ def process_all_lectures(classes: List[Path], manifest: RunManifest) -> None:
 
     with ThreadPoolExecutor(max_workers=config.MAX_AUDIO_WORKERS) as executor:
         futures = {
-            executor.submit(transcribe_single_file, args): args
-            for args in all_task_args
+            executor.submit(transcribe_single_file, task): task
+            for task in all_tasks
         }
 
         with tqdm(
             total=total_files, desc="Transcribing (all classes)", unit="file"
         ) as pbar:
             for future in as_completed(futures):
-                args = futures[future]
-                audio_file = args[0]
-                class_name = args[3]
+                task = futures[future]
 
                 try:
-                    (
-                        success,
-                        message,
-                        original_file,
-                        wav_file,
-                        processed_audio_folder,
-                        class_name,
-                    ) = future.result()
+                    result = future.result()
 
-                    if success:
+                    if result.success:
                         total_successful += 1
-                        class_results[class_name]["successful"] += 1
+                        class_results[result.class_name]["successful"] += 1
 
                         moved_original = move_audio_to_processed(
-                            original_file, processed_audio_folder
+                            result.audio_file, result.processed_audio_folder
                         )
                         moved_wav = True
-                        if wav_file and wav_file.exists():
+                        if result.wav_file and result.wav_file.exists():
                             moved_wav = move_audio_to_processed(
-                                wav_file, processed_audio_folder
+                                result.wav_file, result.processed_audio_folder
                             )
 
                         if moved_original and moved_wav:
@@ -320,30 +340,30 @@ def process_all_lectures(classes: List[Path], manifest: RunManifest) -> None:
                         else:
                             moved_msg = "failed to move audio"
                         pbar.write(
-                            f"✓ [{class_name}] {original_file.name} ({moved_msg})"
+                            f"✓ [{result.class_name}] {result.audio_file.name} ({moved_msg})"
                         )
                     else:
                         total_failed += 1
-                        class_results[class_name]["failed"] += 1
-                        pbar.write(f"✗ [{class_name}] {original_file.name}: {message}")
+                        class_results[result.class_name]["failed"] += 1
+                        pbar.write(f"✗ [{result.class_name}] {result.audio_file.name}: {result.message}")
 
                 except (RuntimeError, OSError, ValueError, TypeError) as error:
                     total_failed += 1
-                    class_results[class_name]["failed"] += 1
+                    class_results[task.class_name]["failed"] += 1
                     logger.error(
-                        f"Unexpected error processing {audio_file.name}: {error}",
+                        f"Unexpected error processing {task.audio_file.name}: {error}",
                         exc_info=True,
                     )
                     manifest.record_file_result(
                         stage="audio_transcription",
-                        class_name=class_name,
-                        input_file=audio_file,
+                        class_name=task.class_name,
+                        input_file=task.audio_file,
                         status="failed",
                         message=str(error),
                         error_type=type(error).__name__,
                     )
                     pbar.write(
-                        f"✗ [{class_name}] {audio_file.name}: Unexpected error: {error}"
+                        f"✗ [{task.class_name}] {task.audio_file.name}: Unexpected error: {error}"
                     )
 
                 pbar.update(1)
