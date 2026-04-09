@@ -10,13 +10,6 @@ import stat
 from pathlib import Path
 from typing import Any, TypeAlias
 
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
-from googleapiclient.errors import HttpError
-
 import config
 from ..utils.logger_config import get_logger
 
@@ -48,6 +41,11 @@ def get_drive_service() -> DriveService:
     Authenticate and return a Google Drive service object.
     Uses OAuth 2.0 with stored credentials or prompts for login.
     """
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from google.auth.transport.requests import Request
+    from googleapiclient.discovery import build
+
     creds = None
 
     # Load existing token if available
@@ -82,7 +80,11 @@ def get_drive_service() -> DriveService:
         flow = InstalledAppFlow.from_client_secrets_file(
             str(CREDENTIALS_FILE), SCOPES
         )
-        creds = flow.run_local_server(port=8080)
+        creds = flow.run_local_server(
+            port=8080,
+            access_type="offline",
+            prompt="consent",
+        )
 
         # Save credentials for next run
         TOKEN_FILE.write_text(creds.to_json())
@@ -169,6 +171,9 @@ def download_file(service: DriveService, file_id: str, destination_path: Path) -
     Download a file from Google Drive to a local path.
     Returns True if successful, False otherwise.
     """
+    from googleapiclient.http import MediaIoBaseDownload
+    from googleapiclient.errors import HttpError
+
     try:
         request = service.files().get_media(fileId=file_id)
 
@@ -196,6 +201,8 @@ def move_file_to_folder(service: DriveService, file_id: str, new_folder_id: str)
     Move a file to a different folder in Google Drive.
     Returns True if successful, False otherwise.
     """
+    from googleapiclient.errors import HttpError
+
     try:
         # Get current parents
         file = service.files().get(fileId=file_id, fields="parents").execute()
@@ -280,6 +287,8 @@ def download_from_drive(classes: dict, parent_folder: Path) -> dict[str, int]:
     Returns:
         Dictionary mapping class names to number of files downloaded
     """
+    from googleapiclient.errors import HttpError
+
     logger.info("Initializing Google Drive connection...")
 
     try:

@@ -3,14 +3,18 @@ Audio transcription using AssemblyAI.
 Orchestrates transcription workflow: preprocessing, transcription, and file management.
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import assemblyai as aai
-import soundfile as sf
+if TYPE_CHECKING:
+    import assemblyai as aai
+
 from tqdm import tqdm
 
 import config
@@ -60,6 +64,8 @@ class _Segment:
 def _transcribe_with_retries(
     wav_file_path: Path, max_retries: int = 3
 ) -> aai.Transcript:
+    import assemblyai as aai  # noqa: F811
+
     transcription_config = aai.TranscriptionConfig(
         speech_models=[aai.SpeechModel.slam_1],
         language_code="en",
@@ -120,6 +126,8 @@ def transcribe_single_file(task: TranscriptionTask) -> TranscriptionResult:
     Returns:
         TranscriptionResult with outcome details
     """
+    import soundfile as sf
+
     audio_file = task.audio_file
     output_folder = task.output_folder
     processed_audio_folder = task.processed_audio_folder
@@ -255,6 +263,8 @@ def process_all_lectures(classes: list[Path], manifest: RunManifest) -> None:
         classes: List of class folder paths
         manifest: Run manifest for recording stage events and file results
     """
+    import assemblyai as aai  # noqa: F811
+
     if not config.ASSEMBLYAI_API_KEY:
         raise ConfigurationError(
             "ASSEMBLYAI_API_KEY environment variable is not set"

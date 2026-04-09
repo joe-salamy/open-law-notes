@@ -1,19 +1,14 @@
 """Low-level Gemini API helpers: error checking, content generation, PDF upload/processing."""
 
+from __future__ import annotations
+
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import google.generativeai as genai
-from google.api_core.exceptions import (
-    DeadlineExceeded,
-    GoogleAPIError,
-    InternalServerError,
-    NotFound,
-    ServiceUnavailable,
-    TooManyRequests,
-    Unauthorized,
-)
+if TYPE_CHECKING:
+    import google.generativeai as genai
 
 import config
 from ..utils.errors import (
@@ -29,6 +24,8 @@ logger = get_logger(__name__)
 
 def check_model_error(e: Exception) -> None:
     """Raise a friendly ConfigurationError if the error indicates an invalid or deprecated model."""
+    from google.api_core.exceptions import NotFound
+
     if isinstance(e, NotFound) or "not found" in str(e).lower():
         raise ConfigurationError(
             f"\nERROR: Gemini model '{config.GEMINI_MODEL}' was not found.\n"
@@ -41,6 +38,13 @@ def check_model_error(e: Exception) -> None:
 
 
 def _is_retryable_error(error: Exception) -> bool:
+    from google.api_core.exceptions import (
+        DeadlineExceeded,
+        InternalServerError,
+        ServiceUnavailable,
+        TooManyRequests,
+    )
+
     if isinstance(
         error,
         (
@@ -61,6 +65,8 @@ def _is_retryable_error(error: Exception) -> bool:
 
 
 def _raise_service_error(error: Exception) -> None:
+    from google.api_core.exceptions import GoogleAPIError, Unauthorized
+
     if isinstance(error, Unauthorized):
         raise AuthenticationError("Gemini API authentication failed.") from error
     check_model_error(error)
@@ -74,6 +80,8 @@ def _execute_with_retries(
     operation_name: str,
     max_retries: int,
 ) -> str | genai.types.File:
+    from google.api_core.exceptions import GoogleAPIError
+
     if max_retries < 1:
         raise ValueError(f"max_retries must be >= 1, got {max_retries}")
 
@@ -116,6 +124,8 @@ def process_with_gemini(
 
 def upload_pdf_to_gemini(filepath: Path, max_retries: int = 3) -> genai.types.File:
     """Upload a PDF file to Gemini and return the file object."""
+    import google.generativeai as genai  # noqa: F811
+
     logger.debug("Uploading PDF to Gemini: %s", filepath.name)
 
     def _operation() -> genai.types.File:

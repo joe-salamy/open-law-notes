@@ -4,16 +4,15 @@ Handles audio conversion, noise reduction, filtering, and normalization.
 Also includes transcript formatting utilities.
 """
 
+from __future__ import annotations
+
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-import numpy as np
-import noisereduce as nr
-import librosa
-from scipy import signal
-from pydub import AudioSegment
+if TYPE_CHECKING:
+    import numpy as np
 
 from ..utils.logger_config import get_logger
 
@@ -45,6 +44,12 @@ def preprocess_audio(audio_file: Path) -> tuple[np.ndarray, int]:
     Returns:
         Tuple of (audio_array, sample_rate)
     """
+    import numpy as np
+    import noisereduce as nr
+    import librosa
+    from scipy import signal
+    from pydub import AudioSegment
+
     logger.debug(f"Starting audio preprocessing for: {audio_file.name}")
 
     # Step 1: Convert M4A to WAV using pydub (handles M4A properly)

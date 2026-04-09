@@ -9,11 +9,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 from config import CLASSES, PARENT_FOLDER, ENABLE_GOOGLE_DRIVE
-from src.llm.llm_processor import process_all_readings, process_all_lectures
 from src.utils.folder_manager import verify_and_create_folders
 from src.utils.file_mover import setup_output_directory
-from src.audio.audio_processor import process_all_lectures as process_audio
-from src.audio.drive_downloader import download_from_drive
 from src.utils.run_manifest import RunManifest
 from src.utils.logger_config import setup_logging, get_logger
 
@@ -60,6 +57,13 @@ def main() -> None:
     )
     args = parser.parse_args()
     reading_only_mode = args.read_only
+
+    # Lazy-load heavy submodules after argparse
+    from src.llm.llm_processor import process_all_readings, process_all_lectures
+
+    if not reading_only_mode:
+        from src.audio.audio_processor import process_all_lectures as process_audio
+        from src.audio.drive_downloader import download_from_drive
 
     # Initialize logging first
     setup_logging()

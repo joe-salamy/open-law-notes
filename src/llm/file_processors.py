@@ -1,10 +1,14 @@
 """Single-file processors for text, PDF, and Word documents."""
 
+from __future__ import annotations
+
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import google.generativeai as genai
+if TYPE_CHECKING:
+    import google.generativeai as genai
 
 import config
 from ..utils.errors import FileProcessingError, PromptLoadError
@@ -172,6 +176,8 @@ def process_single_file(args: FileTaskArgs) -> tuple[bool, str, Path]:
 
 def process_single_pdf(args: FileTaskArgs) -> tuple[bool, str, Path]:
     """Process a single PDF file with Gemini."""
+    import google.generativeai as genai  # noqa: F811
+
     uploaded_file = None
 
     def generate() -> str:

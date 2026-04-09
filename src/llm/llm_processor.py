@@ -1,11 +1,15 @@
 """LLM processing orchestration using Gemini with multithreading."""
 
+from __future__ import annotations
+
 import os
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import google.generativeai as genai
+if TYPE_CHECKING:
+    import google.generativeai as genai
 
 import config
 from ..utils.errors import ConfigurationError, PromptLoadError
@@ -38,6 +42,8 @@ def _get_required_api_key() -> str:
 
 
 def _build_model(system_prompt: str) -> genai.GenerativeModel:
+    import google.generativeai as genai  # noqa: F811
+
     try:
         return genai.GenerativeModel(
             model_name=config.GEMINI_MODEL,
@@ -65,6 +71,8 @@ def _process_all_files(
 
     Returns (successful_outputs_by_class, class_folders).
     """
+    import google.generativeai as genai  # noqa: F811
+
     api_key = _get_required_api_key()
     genai.configure(api_key=api_key)
 
