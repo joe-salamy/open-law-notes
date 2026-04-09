@@ -29,6 +29,7 @@ You must identify and perform a full analysis for **every single legal case** me
   - **Holding**: [Yes or No.] [State the court's precise holding, **bolding** the dispositive legal doctrine.]
   - **Reasoning**:
     - [Each line of the court's reasoning as a separate bullet point. **Bold** key legal concepts, doctrines, and terms throughout.]
+  - **Concurrences/Dissents**: Where the source text includes any concurring or dissenting opinions—whether in full, in excerpt, or in editorial summary—each such separate opinion must be briefed individually. For each, identify the authoring justice, state the points of agreement or departure from the majority opinion, and summarize the analytical basis for the separate writing. Omit this section only where no concurring or dissenting opinion appears in the assigned text.
   - **Disposition**: [The final order, e.g., _Affirmed_, _Reversed_, _Remanded_.]
 
 Exclude any case brief components above not explicitly mentioned in the source text. Integrate each case brief immediately following its mention or analysis within the primary notes. Do not aggregate them into a separate appendix or concluding section.
