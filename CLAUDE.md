@@ -1,7 +1,6 @@
 ## Overview
 
-[Run this command after applying the loadout to auto-generate the overview:]
-`claude -p "Read the top-level README, pyproject.toml or setup.py, and the main entry point(s) of this repo. Then replace the line containing this instruction in CLAUDE.md with exactly 3 sentences: (1) what the project does and who it's for, (2) the core tech stack and architecture pattern, (3) any non-obvious conventions or constraints a contributor must know. Be specific—name frameworks, key modules, and data flows. Do not be generic."`
+OpenLawNotes is a CLI pipeline for law students that transcribes lecture recordings (M4A via AssemblyAI with speaker diarization) and summarizes readings (PDF/DOCX/TXT/MD) into structured Markdown study notes using Google Gemini. The orchestrator (`main.py`) runs a 5-stage pipeline—Google Drive download (`src/audio/drive_downloader`), folder verification (`src/utils/folder_manager`), audio transcription (`src/audio/audio_processor`), lecture note generation, and reading note generation (`src/llm/llm_processor` → `src/llm/gemini_client`)—with parallel workers controlled by `config.py` settings `MAX_AUDIO_WORKERS` and `MAX_LLM_WORKERS`. All user configuration lives in `config.py` (not checked in) and `.env` for API keys; input files are moved (not deleted) to `*-processed/` folders after each run, and a convenience copy of all outputs lands in `new-outputs-safe-delete/` at the project root.
 
 ## Environment
 
