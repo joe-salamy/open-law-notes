@@ -137,13 +137,13 @@ You should see a version number printed out. If you get an error, restart your t
 **Windows** — open Command Prompt and run (replace the path with wherever you unzipped the project):
 
 ```
-cd C:\Users\YourName\Desktop\smart-law-notes
+cd C:\Users\YourName\Desktop\open-law-notes
 ```
 
 **Mac** — open Terminal and run:
 
 ```
-cd /Users/YourName/Desktop/smart-law-notes
+cd /Users/YourName/Desktop/open-law-notes
 ```
 
 > **Tip:** The easiest way to get the right path is to open the folder in File Explorer (Windows) or Finder (Mac), then copy the address from the address bar. On Windows you can also type `cmd` directly into the File Explorer address bar to open a terminal already in that folder.
@@ -415,6 +415,3 @@ Make sure you dropped files into the correct input folder: `open-law-notes/lectu
 
 MIT — see [LICENSE](LICENSE).
 
-## Architecture
-
-- System architecture and data flow: [docs/architecture.md](docs/architecture.md)

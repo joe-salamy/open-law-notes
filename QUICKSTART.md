@@ -14,7 +14,7 @@ These are the only three commands you need to run OpenLawNotes each time.
 ## Windows (Command Prompt)
 
 ```
-cd C:\path\to\smart-law-notes
+cd C:\path\to\open-law-notes
 ```
 
 _(replace this with your actual project path)_
@@ -32,7 +32,7 @@ python main.py
 ## Mac (Terminal)
 
 ```
-cd /path/to/smart-law-notes
+cd /path/to/open-law-notes
 ```
 
 _(replace this with your actual project path)_

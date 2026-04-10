@@ -5,11 +5,14 @@ env/
 
 # Environment variables
 .env
+.env.*
 
 # Google OAuth Credentials (NEVER commit these!)
 credentials.json
 token.pickle
 token.json
+*.pem
+*.key
 
 # Python cache
 __pycache__/
@@ -17,6 +20,7 @@ __pycache__/
 *$py.class
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 
 # Distribution / packaging
 build/
@@ -26,7 +30,13 @@ dist/
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+
+# AI tooling
 .claude/
+CLAUDE.md
 
 # Logs
 *.log
@@ -56,6 +66,10 @@ new-outputs-safe-delete/
 
 # Scratchpad
 scratchpad.md
+
+# OS
+.DS_Store
+Thumbs.db
 
 # Local config (copy of config.py.example with your personal paths)
 config.py

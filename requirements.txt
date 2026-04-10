@@ -5,7 +5,6 @@ librosa
 scipy
 tqdm
 pydub
-ffmpeg-python
 google-generativeai==0.8.3
 google-api-python-client
 google-auth-httplib2
